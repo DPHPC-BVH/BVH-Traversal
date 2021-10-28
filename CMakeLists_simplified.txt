@@ -2,19 +2,26 @@ cmake_minimum_required(VERSION 3.16.0 FATAL_ERROR)
 
 project(rt CXX)
 
-################################################################################
-# Set target arch type if empty. Visual studio solution generator provides it.
-################################################################################
-if(NOT CMAKE_VS_PLATFORM_NAME)
-    set(CMAKE_VS_PLATFORM_NAME "x64")
-endif()
-message("${CMAKE_VS_PLATFORM_NAME} architecture in use")
 
-# TODO: Add Linux
-if(NOT ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32"
-     OR "${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64"))
-    message(FATAL_ERROR "${CMAKE_VS_PLATFORM_NAME} arch is not supported!")
-endif()
+################################################################################
+# Platform we are compiling on
+# TODO: autodetection
+################################################################################
+set(BUILD_PLATFORMS
+    "Win64"
+    "Win32"
+    "Linux64"
+    "Linux32"
+    CACHE STRING "" FORCE
+)
+
+set(BUILD_PLATFORM "Win64" CACHE STRING "Platform to build on")
+set_property(CACHE BUILD_PLATFORM PROPERTY STRINGS Win64 Win32 Linux64 Linux32)
+
+
+message("${BUILD_PLATFORM} platform in use")
+
+# TODO: Add Linux support
 
 ################################################################################
 # Global configuration types
@@ -53,15 +60,6 @@ if(MSVC)
     set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS}")
     set(CMAKE_STATIC_LINKER_FLAGS_RELEASE "${CMAKE_STATIC_LINKER_FLAGS}")
 endif()
-
-################################################################################
-# Nuget packages function stub.
-################################################################################
-function(use_package TARGET PACKAGE VERSION)
-    message(WARNING "No implementation of use_package. Create yours. "
-                    "Package \"${PACKAGE}\" with version \"${VERSION}\" "
-                    "for target \"${TARGET}\" is ignored!")
-endfunction()
 
 ################################################################################
 # Common utils
@@ -220,31 +218,26 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 ################################################################################
 # Output directory
 ################################################################################
-if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+if("${BUILD_PLATFORM}" STREQUAL "Win32")
     set_target_properties(${PROJECT_NAME} PROPERTIES
         OUTPUT_DIRECTORY_DEBUG   "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_VS_PLATFORM_NAME}_$<CONFIG>/${PROJECT_NAME}/"
         OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_VS_PLATFORM_NAME}_$<CONFIG>/${PROJECT_NAME}/"
     )
-elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
     set_target_properties(${PROJECT_NAME} PROPERTIES
         OUTPUT_DIRECTORY_DEBUG   "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_VS_PLATFORM_NAME}_$<CONFIG>/${PROJECT_NAME}/"
         OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_VS_PLATFORM_NAME}_$<CONFIG>/${PROJECT_NAME}/"
     )
 endif()
-if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
-    set_target_properties(${PROJECT_NAME} PROPERTIES
-        INTERPROCEDURAL_OPTIMIZATION         "TRUE"
-    )
-elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
-    set_target_properties(${PROJECT_NAME} PROPERTIES
-        INTERPROCEDURAL_OPTIMIZATION         "TRUE"
-    )
-endif()
+
+# enable LTO
+set_target_properties(${PROJECT_NAME} PROPERTIES INTERPROCEDURAL_OPTIMIZATION "TRUE")
+
 ################################################################################
 # MSVC runtime library
 ################################################################################
 get_property(MSVC_RUNTIME_LIBRARY_DEFAULT TARGET ${PROJECT_NAME} PROPERTY MSVC_RUNTIME_LIBRARY)
-if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+if("${BUILD_PLATFORM}" STREQUAL "Win32")
     string(CONCAT "MSVC_RUNTIME_LIBRARY_STR"
         $<$<CONFIG:Debug>:
             MultiThreadedDebug
@@ -254,7 +247,7 @@ if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
         >
         $<$<NOT:$<OR:$<CONFIG:Debug>,$<CONFIG:Release>>>:${MSVC_RUNTIME_LIBRARY_DEFAULT}>
     )
-elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
     string(CONCAT "MSVC_RUNTIME_LIBRARY_STR"
         $<$<CONFIG:Debug>:
             MultiThreadedDebug
@@ -270,24 +263,31 @@ set_target_properties(${PROJECT_NAME} PROPERTIES MSVC_RUNTIME_LIBRARY ${MSVC_RUN
 ################################################################################
 # Include directories
 ################################################################################
-if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+# TODO: set these paths correctly depending on the build environment
+if("${BUILD_PLATFORM}" STREQUAL "Win32")
     target_include_directories(${PROJECT_NAME} PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/src/framework;"
         "$ENV{CUDA_INC_PATH};"
         "${CMAKE_CURRENT_BINARY_DIR}\\${CMAKE_CFG_INTDIR}\\"
     )
-elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
     target_include_directories(${PROJECT_NAME} PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/src/framework;"
         "$ENV{CUDA_INC_PATH};"
         "${CMAKE_CURRENT_BINARY_DIR}\\${CMAKE_CFG_INTDIR}\\"
+    )
+elseif("${BUILD_PLATFORM}" STREQUAL "Linux64" OR "${BUILD_PLATFORM}" STREQUAL "Linux32")
+    target_include_directories(${PROJECT_NAME} PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/framework;"
+        "$ENV{CUDA_INC_PATH};"
+        "${CMAKE_CURRENT_BINARY_DIR}"
     )
 endif()
 
 ################################################################################
 # Compile definitions
 ################################################################################
-if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+if("${BUILD_PLATFORM}" STREQUAL "Win32")
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         "$<$<CONFIG:Debug>:"
             "_DEBUG"
@@ -297,7 +297,7 @@ if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
         ">"
         "WIN32"
     )
-elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         "$<$<CONFIG:Debug>:"
             "_DEBUG"
@@ -315,7 +315,7 @@ endif()
 # TODO: Add Flags For GNU compilers
 
 if(MSVC)
-    if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+    if("${BUILD_PLATFORM}" STREQUAL "Win32")
         target_compile_options(${PROJECT_NAME} PRIVATE
             $<$<CONFIG:Debug>:
                 /Od;
@@ -334,7 +334,7 @@ if(MSVC)
             ${DEFAULT_CXX_EXCEPTION_HANDLING};
             /Y-
         )
-    elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+    elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
         target_compile_options(${PROJECT_NAME} PRIVATE
             $<$<CONFIG:Debug>:
                 /Od;
@@ -354,11 +354,11 @@ if(MSVC)
             /Y-
         )
     endif()
-    if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+    if("${BUILD_PLATFORM}" STREQUAL "Win32")
         string(CONCAT FILE_CL_OPTIONS
             "/W2;/wd4530"
         )
-    elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+    elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
         string(CONCAT FILE_CL_OPTIONS
             "/W2;/wd4530"
         )
@@ -366,7 +366,12 @@ if(MSVC)
     source_file_compile_options(src/framework/3rdparty/lodepng/lodepng.cpp ${FILE_CL_OPTIONS})
 endif()
 
-
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if("${BUILD_PLATFORM}" STREQUAL "Linux32" OR "${BUILD_PLATFORM}" STREQUAL "Linux64")
+        # TODO: set linux gcc compile flags
+        source_file_compile_options(src/framework/3rdparty/lodepng/lodepng.cpp ${FILE_CL_OPTIONS})
+    endif()
+endif()
 
 
 
@@ -445,12 +450,12 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 ################################################################################
 # Target name
 ################################################################################
-if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+if("${BUILD_PLATFORM}" STREQUAL "Win32")
     set_target_properties(${PROJECT_NAME} PROPERTIES
         TARGET_NAME_DEBUG   "${PROJECT_NAME}_${CMAKE_VS_PLATFORM_NAME}_$<CONFIG>"
         TARGET_NAME_RELEASE "${PROJECT_NAME}_${CMAKE_VS_PLATFORM_NAME}_$<CONFIG>"
     )
-elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
     set_target_properties(${PROJECT_NAME} PROPERTIES
         TARGET_NAME_DEBUG   "${PROJECT_NAME}_${CMAKE_VS_PLATFORM_NAME}_$<CONFIG>"
         TARGET_NAME_RELEASE "${PROJECT_NAME}_${CMAKE_VS_PLATFORM_NAME}_$<CONFIG>"
@@ -459,31 +464,27 @@ endif()
 ################################################################################
 # Output directory
 ################################################################################
-if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+if("${BUILD_PLATFORM}" STREQUAL "Win32")
     set_target_properties(${PROJECT_NAME} PROPERTIES
         OUTPUT_DIRECTORY_DEBUG   "${CMAKE_CURRENT_SOURCE_DIR}/"
         OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/"
     )
-elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
     set_target_properties(${PROJECT_NAME} PROPERTIES
         OUTPUT_DIRECTORY_DEBUG   "${CMAKE_CURRENT_SOURCE_DIR}/"
         OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/"
     )
 endif()
-if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
-    set_target_properties(${PROJECT_NAME} PROPERTIES
-        INTERPROCEDURAL_OPTIMIZATION         "TRUE"
-    )
-elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
-    set_target_properties(${PROJECT_NAME} PROPERTIES
-        INTERPROCEDURAL_OPTIMIZATION         "TRUE"
-    )
-endif()
+
+# enable LTO
+set_target_properties(${PROJECT_NAME} PROPERTIES INTERPROCEDURAL_OPTIMIZATION "TRUE")
+
+
 ################################################################################
 # MSVC runtime library
 ################################################################################
 get_property(MSVC_RUNTIME_LIBRARY_DEFAULT TARGET ${PROJECT_NAME} PROPERTY MSVC_RUNTIME_LIBRARY)
-if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+if("${BUILD_PLATFORM}" STREQUAL "Win32")
     string(CONCAT "MSVC_RUNTIME_LIBRARY_STR"
         $<$<CONFIG:Debug>:
             MultiThreadedDebug
@@ -493,7 +494,7 @@ if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
         >
         $<$<NOT:$<OR:$<CONFIG:Debug>,$<CONFIG:Release>>>:${MSVC_RUNTIME_LIBRARY_DEFAULT}>
     )
-elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
     string(CONCAT "MSVC_RUNTIME_LIBRARY_STR"
         $<$<CONFIG:Debug>:
             MultiThreadedDebug
@@ -509,24 +510,30 @@ set_target_properties(${PROJECT_NAME} PROPERTIES MSVC_RUNTIME_LIBRARY ${MSVC_RUN
 ################################################################################
 # Include directories
 ################################################################################
-if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+if("${BUILD_PLATFORM}" STREQUAL "Win32")
     target_include_directories(${PROJECT_NAME} PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/src/rt;"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/framework;"
         "$ENV{CUDA_INC_PATH}"
     )
-elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
     target_include_directories(${PROJECT_NAME} PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/src/rt;"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/framework;"
         "$ENV{CUDA_INC_PATH}"
+    )
+elseif("${BUILD_PLATFORM}" STREQUAL "Linux64" OR "${BUILD_PLATFORM}" STREQUAL "Linux32")
+    target_include_directories(${PROJECT_NAME} PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/framework;"
+        "$ENV{CUDA_INC_PATH};"
+        "${CMAKE_CURRENT_BINARY_DIR}"
     )
 endif()
 
 ################################################################################
 # Compile definitions
 ################################################################################
-if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+if("${BUILD_PLATFORM}" STREQUAL "Win32")
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         "$<$<CONFIG:Debug>:"
             "_DEBUG"
@@ -537,7 +544,7 @@ if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
         "WIN32;"
         "_CONSOLE"
     )
-elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         "$<$<CONFIG:Debug>:"
             "_DEBUG"
@@ -554,7 +561,7 @@ endif()
 # Compile and link options
 ################################################################################
 if(MSVC)
-    if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+    if("${BUILD_PLATFORM}" STREQUAL "Win32")
         target_compile_options(${PROJECT_NAME} PRIVATE
             $<$<CONFIG:Debug>:
                 /Od;
@@ -573,7 +580,7 @@ if(MSVC)
             ${DEFAULT_CXX_EXCEPTION_HANDLING};
             /Y-
         )
-    elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+    elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
         target_compile_options(${PROJECT_NAME} PRIVATE
             $<$<CONFIG:Debug>:
                 /Od;
@@ -593,7 +600,7 @@ if(MSVC)
             /Y-
         )
     endif()
-    if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+    if("${BUILD_PLATFORM}" STREQUAL "Win32")
         target_link_options(${PROJECT_NAME} PRIVATE
             $<$<CONFIG:Release>:
                 /OPT:REF;
@@ -606,7 +613,7 @@ if(MSVC)
             /DYNAMICBASE:NO;
             /INCREMENTAL:NO
         )
-    elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+    elseif("${BUILD_PLATFORM}" STREQUAL "Win64")
         target_link_options(${PROJECT_NAME} PRIVATE
             $<$<CONFIG:Release>:
                 /OPT:REF;
@@ -622,6 +629,13 @@ if(MSVC)
     endif()
 endif()
 
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if("${BUILD_PLATFORM}" STREQUAL "Linux32" OR "${BUILD_PLATFORM}" STREQUAL "Linux64")
+        # TODO: set linux gcc compile & linker flags
+    endif()
+endif()
+
 ################################################################################
 # Dependencies
 ################################################################################
@@ -630,11 +644,16 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     framework
 )
 
-if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+if("${BUILD_PLATFORM}" STREQUAL "Win32")
     set(ADDITIONAL_LIBRARY_DEPENDENCIES
         "opengl32"
     )
-elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+elseif("${BUILD_PLATFORM}" STREQUAL "x64")
+    set(ADDITIONAL_LIBRARY_DEPENDENCIES
+        "opengl32"
+    )
+    elseif("${BUILD_PLATFORM}" STREQUAL "Linux32" OR "${BUILD_PLATFORM}" STREQUAL "Linux64")
+    # TODO: check if this works on linux
     set(ADDITIONAL_LIBRARY_DEPENDENCIES
         "opengl32"
     )
