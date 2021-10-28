@@ -263,7 +263,26 @@ String CudaCompiler::compileCubinFile(bool enablePrints, bool autoFail)
 }
 
 //------------------------------------------------------------------------
+// Hard code all paths to make it run first...
+void CudaCompiler::staticInit(void)     
+{
+    String cudaBinPath = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.4\\bin";
+    String pathEnv = queryEnv("PATH");
+    String vsBinPath = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\VC\\Tools\\MSVC\\14.28.29333\\bin\\Hostx64\\x64";
+    String cudaIncPath = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.4\\include";
+    String vsIncPath = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\VC\\Tools\\MSVC\\14.28.29333\\include";
 
+	// Form NVCC command line.
+
+	s_nvccCommand = sprintf("set PATH=%s;%s & nvcc.exe -ccbin \"%s\" -I\"%s\" -I\"%s\" -I. -D_CRT_SECURE_NO_DEPRECATE",
+		cudaBinPath.getPtr(),
+		pathEnv.getPtr(),
+		vsBinPath.getPtr(),
+		cudaIncPath.getPtr(),
+		vsIncPath.getPtr());
+}
+
+/*
 void CudaCompiler::staticInit(void)
 {
     if (s_inited || hasError())
@@ -429,6 +448,7 @@ void CudaCompiler::staticInit(void)
         cudaIncPath.getPtr(),
         vsIncPath.getPtr());
 }
+*/
 
 //------------------------------------------------------------------------
 
