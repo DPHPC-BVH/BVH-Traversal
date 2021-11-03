@@ -115,6 +115,10 @@ private:
 
     void        woopifyTri          (const BVH& bvh, int idx);
 
+    // helper function to create a traversal order for the stackless approach
+    // returns the dimension in which the centroids of b0 and b1 are the furthes appart
+    S32 getChildOrderDim(const AABB* b0, const AABB* b1);
+
 private:
     BVHLayout   m_layout;
     Buffer      m_nodes;

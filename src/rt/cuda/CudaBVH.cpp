@@ -113,14 +113,27 @@ CudaBVH& CudaBVH::operator=(CudaBVH& other)
 
 //------------------------------------------------------------------------
 
+
+S32 CudaBVH::getChildOrderDim(const AABB* b0, const AABB* b1) {
+    Vec3f center0 = b0->midPoint();
+    Vec3f center1 = b1->midPoint();
+    Vec3f diff = (center1 - center0).abs();
+
+    F32 max_xy = max(diff.x, diff.y);
+    F32 max_dim_xy = diff.x > diff.y ? 0 : 1;
+    
+    return diff.z > max_xy ? 2 : max_dim_xy;
+}
+
 void CudaBVH::createNodeBasic(const BVH& bvh)
 {
     struct StackEntry
     {
         const BVHNode*  node;
+        S32             parent_idx;
         S32             idx;
 
-        StackEntry(const BVHNode* n = NULL, int i = 0) : node(n), idx(i) {}
+        StackEntry(const BVHNode* n = NULL, int i = 0, int p = 0) : node(n), idx(i), parent_idx(p) {}
         int encodeIdx(void) const { return (node->isLeaf()) ? ~idx : idx; }
     };
 
@@ -128,7 +141,7 @@ void CudaBVH::createNodeBasic(const BVH& bvh)
     m_nodes.resizeDiscard((root->getSubtreeSize(BVH_STAT_NODE_COUNT) * 64 + Align - 1) & -Align);
 
     int nextNodeIdx = 0;
-    Array<StackEntry> stack(StackEntry(root, nextNodeIdx++));
+    Array<StackEntry> stack(StackEntry(root, nextNodeIdx++, 0));
     while (stack.getSize())
     {
         StackEntry e = stack.removeLast();
@@ -137,6 +150,9 @@ void CudaBVH::createNodeBasic(const BVH& bvh)
         int c0;
         int c1;
 
+        // order of c0,c1
+        S32 ord = 0;
+
         // Leaf?
 
         if (e.node->isLeaf())
@@ -144,6 +160,7 @@ void CudaBVH::createNodeBasic(const BVH& bvh)
             const LeafNode* leaf = reinterpret_cast<const LeafNode*>(e.node);
             b0 = &leaf->m_bounds;
             b1 = &leaf->m_bounds;
+            // triangle buffer index range [m_lo, m_hi)
             c0 = leaf->m_lo;
             c1 = leaf->m_hi;
         }
@@ -152,28 +169,41 @@ void CudaBVH::createNodeBasic(const BVH& bvh)
 
         else
         {
-            StackEntry e0 = stack.add(StackEntry(e.node->getChildNode(0), nextNodeIdx++));
-            StackEntry e1 = stack.add(StackEntry(e.node->getChildNode(1), nextNodeIdx++));
+            StackEntry e0 = stack.add(StackEntry(e.node->getChildNode(0), nextNodeIdx++, e.idx));
+            StackEntry e1 = stack.add(StackEntry(e.node->getChildNode(1), nextNodeIdx++, e.idx));
             b0 = &e0.node->m_bounds;
             b1 = &e1.node->m_bounds;
             c0 = e0.encodeIdx();
             c1 = e1.encodeIdx();
+
+            ord = getChildOrderDim(b0, b1);
+
+        }
+
+        Vec4i extra_data;
+
+        // if stackless -> add parent index and separation axis to unused fields
+        if(m_layout == BVHLayout_Stackless){
+            int p = e.parent_idx;
+            extra_data = Vec4i(c0, c1, p, ord);
+        }else{
+            extra_data = Vec4i(c0, c1, 0, 0);
         }
 
         // Write entry.
-
         Vec4i data[] =
         {
             Vec4i(floatToBits(b0->min().x), floatToBits(b0->max().x), floatToBits(b0->min().y), floatToBits(b0->max().y)),
             Vec4i(floatToBits(b1->min().x), floatToBits(b1->max().x), floatToBits(b1->min().y), floatToBits(b1->max().y)),
             Vec4i(floatToBits(b0->min().z), floatToBits(b0->max().z), floatToBits(b1->min().z), floatToBits(b1->max().z)),
-            Vec4i(c0, c1, 0, 0)
+            extra_data
         };
 
         switch (m_layout)
         {
         case BVHLayout_AOS_AOS:
         case BVHLayout_AOS_SOA:
+        case BVHLayout_Stackless:
             memcpy(m_nodes.getMutablePtr(e.idx * 64), data, 64);
             break;
 
@@ -205,6 +235,7 @@ void CudaBVH::createTriWoopBasic(const BVH& bvh)
         {
         case BVHLayout_AOS_AOS:
         case BVHLayout_SOA_AOS:
+        case BVHLayout_Stackless:
             memcpy(m_triWoop.getMutablePtr(i * 64), m_woop, 48);
             break;
 

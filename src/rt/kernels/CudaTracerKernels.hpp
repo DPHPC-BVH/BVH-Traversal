@@ -50,6 +50,7 @@ enum BVHLayout
     BVHLayout_SOA_SOA,                  // Nodes = structure-of-arrays, triangles = structure-of-arrays.
     BVHLayout_Compact,                  // Variant of BVHLayout_AOS_AOS with implicit leaf nodes.
     BVHLayout_Compact2,                 // Variant of BVHLayout_AOS_AOS with implicit leaf nodes.
+    BVHLayout_Stackless,                // New: Variant of BVHLayout_AOS_AOS, which includes parent indices and an implicit traversal order
 
     BVHLayout_Max
 };
