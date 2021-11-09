@@ -44,6 +44,8 @@
 #define LOOP_NODE                       100 // Nodes: 1 = if, 100 = while.
 #define LOOP_TRI                        100 // Triangles: 1 = if, 100 = while.
 
+#define DEBUG 1
+
 extern "C" __device__ int g_warpCounter;    // Work counter for persistent threads.
 
 //------------------------------------------------------------------------
@@ -77,7 +79,7 @@ TRACE_FUNC
     // Live state during traversal, stored in registers.
 
     float   origx, origy, origz;    // Ray origin.
-    int     lastNodeAddr;                  // current node state
+    int     lastNodeAddr;           // current parent
     int     nodeAddr;               // Current node
 
     int     triAddr;                // Start of a pending triangle list.
@@ -148,73 +150,21 @@ TRACE_FUNC
         // Traversal loop.
         do{
             
-            // if we are a leaf: do triangle instersection -
-             if (nodeAddr < 0 && triAddr >= triAddr2){
-                float4 leaf=FETCH_TEXTURE(nodesA, (-nodeAddr-1)*4+3, float4);
-
-                triAddr  = __float_as_int(leaf.x); // stored as int
-                triAddr2 = __float_as_int(leaf.y); // stored as int
-            }
-
-// Triangle Intersection Start =============================================================================================================================
-            // Intersect the ray against each triangle using Sven Woop's algorithm.
-
-            for (int i = LOOP_TRI - 1; i >= 0 && triAddr < triAddr2; triAddr++, i--)
-            {
-                // Compute and check intersection t-value.
-
-                float4 v00 = FETCH_GLOBAL(trisA, triAddr*4+0, float4);
-                float4 v11 = FETCH_GLOBAL(trisA, triAddr*4+1, float4);
-
-                float dirx  = 1.0f / aux->idirx;
-                float diry  = 1.0f / aux->idiry;
-                float dirz  = 1.0f / aux->idirz;
-
-                float Oz = v00.w - origx*v00.x - origy*v00.y - origz*v00.z;
-                float invDz = 1.0f / (dirx*v00.x + diry*v00.y + dirz*v00.z);
-                float t = Oz * invDz;
-
-                if (t > aux->tmin && t < hitT)
-                {
-                    // Compute and check barycentric u.
-
-                    float Ox = v11.w + origx*v11.x + origy*v11.y + origz*v11.z;
-                    float Dx = dirx*v11.x + diry*v11.y + dirz*v11.z;
-                    float u = Ox + t*Dx;
-
-                    if (u >= 0.0f)
-                    {
-                        // Compute and check barycentric v.
-                        float4 v22 = FETCH_GLOBAL(trisA, triAddr*4+2, float4);
-
-                        float Oy = v22.w + origx*v22.x + origy*v22.y + origz*v22.z;
-                        float Dy = dirx*v22.x + diry*v22.y + dirz*v22.z;
-                        float v = Oy + t*Dy;
-
-                        if (v >= 0.0f && u + v <= 1.0f)
-                        {
-                            // Record intersection.
-                            // Closest intersection not required => terminate.
-
-                            hitT = t;
-                            STORE_RESULT(traversalIds[2], FETCH_GLOBAL(triIndices, triAddr, int), t);
-                            if (anyHit)
-                            {
-                                // set  to root
-                                nodeAddr = 0;
-                                triAddr = triAddr2; // Breaks the do-while.
-                                break;
-                            }
-                        }
-                    }
+            #ifdef DEBUG
+                if(nodeAddr == 0 && lastNodeAddr == 0){
+                    printf("Invalid node state 1!");
+                    return;
                 }
-            } // triangle
-// Triangle Intersection End =============================================================================================================================
+                if(nodeAddr == lastNodeAddr){
+                    printf("Invalid node state 2!");
+                    return;
+                }
+            #endif 
             
-            // we found an intersection and are happy with any
-            if(nodeAddr == 0 && lastNodeAddr != -1) break;
+            
+            // we are an internal node
+            // fetch node data
 
-            // fetch child node data
             float4 cnodes=FETCH_TEXTURE(nodesA, nodeAddr*4+3, float4); // (c0, c1, p, dim)
             int nearChild = __float_as_int(cnodes.x);
             int farChild = __float_as_int(cnodes.y);
@@ -224,7 +174,35 @@ TRACE_FUNC
 
             // get near and far child
             int dim = __float_as_int(cnodes.w);
+            #ifdef DEBUG
+            if(dim < 0 || dim > 2){
+                printf("Wrong dimension!!!!");
+                return;
+            }
+            #endif
+
+            
+
             float ray_dim = ((float*)aux)[dim];
+
+            #ifdef DEBUG
+            float ray_dim_2 = 0.0f;
+            switch(dim){
+                case 0: 
+                    ray_dim_2 = aux->idirx;
+                    break;
+                case 1:
+                    ray_dim_2 = aux->idiry;
+                    break;
+                case 2:
+                    ray_dim_2 = aux->idirz;
+                    break;
+            }
+            if(ray_dim != ray_dim_2){
+                printf("Wrong parith!!");
+                return;
+            }
+            #endif
 
             // TODO: index based calculation
             //float sign = copysignf (1.0f, ray_dim);
@@ -238,6 +216,7 @@ TRACE_FUNC
                 lastNodeAddr = nodeAddr;
                 nodeAddr = parent;
                 continue;
+                //goto trace_loop_end;
             }
 
             // if we come from parent -> nearChild, if we come from sibling -> farChild
@@ -295,12 +274,89 @@ TRACE_FUNC
                     lastNodeAddr = nodeAddr;
                     nodeAddr = parent;
                 }
+                goto trace_loop_end;
             }
 
 
+            // if the child we want to go to is a leaf: do triangle instersection - and skip
+             if (nodeAddr < 0 && triAddr >= triAddr2){
+                float4 leaf=FETCH_TEXTURE(nodesA, (-nodeAddr-1)*4+3, float4);
+                
+                // skip child
+                // goto next node: either sibling or parent
 
 
-        }while(nodeAddr > 0); // we returned to the root
+                nodeAddr = lastNodeAddr;
+                lastNodeAddr = current_child;
+                
+
+
+                triAddr  = __float_as_int(leaf.x); // stored as int
+                triAddr2 = __float_as_int(leaf.y); // stored as int
+
+            }
+
+// Triangle Intersection Start =============================================================================================================================
+            // Intersect the ray against each triangle using Sven Woop's algorithm.
+
+            for (int i = LOOP_TRI - 1; i >= 0 && triAddr < triAddr2; triAddr++, i--)
+            {
+                // Compute and check intersection t-value.
+
+                float4 v00 = FETCH_GLOBAL(trisA, triAddr*4+0, float4);
+                float4 v11 = FETCH_GLOBAL(trisA, triAddr*4+1, float4);
+
+                float dirx  = 1.0f / aux->idirx;
+                float diry  = 1.0f / aux->idiry;
+                float dirz  = 1.0f / aux->idirz;
+
+                float Oz = v00.w - origx*v00.x - origy*v00.y - origz*v00.z;
+                float invDz = 1.0f / (dirx*v00.x + diry*v00.y + dirz*v00.z);
+                float t = Oz * invDz;
+
+                if (t > aux->tmin && t < hitT)
+                {
+                    // Compute and check barycentric u.
+
+                    float Ox = v11.w + origx*v11.x + origy*v11.y + origz*v11.z;
+                    float Dx = dirx*v11.x + diry*v11.y + dirz*v11.z;
+                    float u = Ox + t*Dx;
+
+                    if (u >= 0.0f)
+                    {
+                        // Compute and check barycentric v.
+                        float4 v22 = FETCH_GLOBAL(trisA, triAddr*4+2, float4);
+
+                        float Oy = v22.w + origx*v22.x + origy*v22.y + origz*v22.z;
+                        float Dy = dirx*v22.x + diry*v22.y + dirz*v22.z;
+                        float v = Oy + t*Dy;
+
+                        if (v >= 0.0f && u + v <= 1.0f)
+                        {
+                            // Record intersection.
+                            // Closest intersection not required => terminate.
+
+                            hitT = t;
+                            STORE_RESULT(traversalIds[2], FETCH_GLOBAL(triIndices, triAddr, int), t);
+                            if (anyHit)
+                            {
+                                // set to root
+                                nodeAddr = 0;
+                                triAddr = triAddr2; // Breaks the do-while.
+                                break;
+                            }
+                        }
+                    }
+                }
+            } // triangle
+// Triangle Intersection End =============================================================================================================================
+
+trace_loop_end:
+            ;
+
+
+        }while(nodeAddr != 0); // we returned to the root
+
 
     } while(aux); // persistent threads (always true)
 }
