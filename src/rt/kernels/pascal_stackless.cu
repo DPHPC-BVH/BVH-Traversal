@@ -44,7 +44,7 @@
 #define LOOP_NODE                       100 // Nodes: 1 = if, 100 = while.
 #define LOOP_TRI                        100 // Triangles: 1 = if, 100 = while.
 
-#define DEBUG 1
+//#define DEBUG 1
 
 extern "C" __device__ int g_warpCounter;    // Work counter for persistent threads.
 
@@ -85,6 +85,7 @@ TRACE_FUNC
     int     triAddr;                // Start of a pending triangle list.
     int     triAddr2;               // End of a pending triangle list.
     float   hitT;                   // t-value of the closest intersection.
+
 
     // Initialize persistent threads.
 
@@ -145,6 +146,16 @@ TRACE_FUNC
             triAddr2 = 0;
             STORE_RESULT(rayidx, -1, 0.0f); // No triangle intersected so far.
             hitT     = d.w; // tmax
+
+            #ifdef DEBUG
+            // check root data
+            float4 cnodes=FETCH_TEXTURE(nodesA, 3, float4); // (c0, c1, p, dim)
+            int r_parent = __float_as_int(cnodes.z);
+            if(r_parent != -1){
+                printf("wrong root parent: %i", r_parent);
+            }
+            #endif
+
         }
 
         // Traversal loop.
@@ -212,11 +223,35 @@ TRACE_FUNC
                 swap(nch_idx, fch_idx);
             }
 
+            #ifdef DEBUG
+            if(lastNodeAddr != parent && lastNodeAddr != nearChild && lastNodeAddr != farChild && lastNodeAddr != -1){
+                printf("Invalid state 3!!\n");
+            }
+            /*if(lastNodeAddr == nearChild && nodeAddr == 0){
+                 printf("We returned to root from nearChild: %i\n", nearChild);
+            }*/
+            /*if(nodeAddr == 1 || nodeAddr == 2){
+                printf("Parent should be root: %i", parent);
+            }*/
+
+            #endif
+
+
+            
+
             if(lastNodeAddr == farChild){
+
+                #ifdef DEBUG
+                /*if(nodeAddr == 1){
+                    printf("We returned from farchild of 1; nextConf: nodeAddr->%i lastNodeAddr->%i\n", parent, nodeAddr);
+                }*/
+                #endif
+
                 lastNodeAddr = nodeAddr;
                 nodeAddr = parent;
+
+
                 continue;
-                //goto trace_loop_end;
             }
 
             // if we come from parent -> nearChild, if we come from sibling -> farChild
@@ -224,6 +259,16 @@ TRACE_FUNC
 
             // 0 if currentChild is c0, 1 if currentchild is c1
             int current_child_idx = (lastNodeAddr == parent) ? nch_idx : fch_idx;
+
+
+            #ifdef DEBUG
+
+            /*if(nodeAddr == 0 && lastNodeAddr == -1 && current_child != nearChild && first_entry == 1){
+                printf("Root nearchild fail! parent: %i, lasNodeAddr: %i\n",parent, lastNodeAddr);
+            }*/
+            
+            first_entry = 0;
+            #endif
 
             // fetch additional node data: 
             float4 nxy = FETCH_TEXTURE(nodesA, nodeAddr*4+current_child_idx, float4);  // (c0/1.lo.x, c0/1.hi.x, c0/1.lo.y, c0/1.hi.y)
@@ -274,7 +319,7 @@ TRACE_FUNC
                     lastNodeAddr = nodeAddr;
                     nodeAddr = parent;
                 }
-                goto trace_loop_end;
+                continue;
             }
 
 
@@ -284,13 +329,9 @@ TRACE_FUNC
                 
                 // skip child
                 // goto next node: either sibling or parent
-
-
                 nodeAddr = lastNodeAddr;
                 lastNodeAddr = current_child;
                 
-
-
                 triAddr  = __float_as_int(leaf.x); // stored as int
                 triAddr2 = __float_as_int(leaf.y); // stored as int
 
@@ -338,10 +379,11 @@ TRACE_FUNC
 
                             hitT = t;
                             STORE_RESULT(traversalIds[2], FETCH_GLOBAL(triIndices, triAddr, int), t);
+
                             if (anyHit)
                             {
                                 // set to root
-                                nodeAddr = 0;
+                                nodeAddr = -1;
                                 triAddr = triAddr2; // Breaks the do-while.
                                 break;
                             }
@@ -355,9 +397,14 @@ trace_loop_end:
             ;
 
 
-        }while(nodeAddr != 0); // we returned to the root
-
-
+        }while(nodeAddr >= 0 || triAddr < triAddr2); // we returned to the root
+        /*
+        #ifdef DEBUG
+        if(found_tri == 0){
+            printf("no Triangle intersection found!!!!\n");
+        }
+        #endif
+        */
     } while(aux); // persistent threads (always true)
 }
 

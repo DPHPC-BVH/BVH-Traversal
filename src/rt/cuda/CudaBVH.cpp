@@ -141,7 +141,7 @@ void CudaBVH::createNodeBasic(const BVH& bvh)
     m_nodes.resizeDiscard((root->getSubtreeSize(BVH_STAT_NODE_COUNT) * 64 + Align - 1) & -Align);
 
     int nextNodeIdx = 0;
-    Array<StackEntry> stack(StackEntry(root, nextNodeIdx++, 0));
+    Array<StackEntry> stack(StackEntry(root, nextNodeIdx++, -1));
     while (stack.getSize())
     {
         StackEntry e = stack.removeLast();
@@ -184,7 +184,7 @@ void CudaBVH::createNodeBasic(const BVH& bvh)
 
         // if stackless -> add parent index and separation axis to unused fields
         if(m_layout == BVHLayout_Stackless){
-            int p = e.parent_idx;
+            int p = e.parent_idx; // no need to encode since it has to be an internal node
             extra_data = Vec4i(c0, c1, p, ord);
         }else{
             extra_data = Vec4i(c0, c1, 0, 0);
