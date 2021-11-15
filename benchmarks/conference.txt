@@ -1,0 +1,9 @@
+camera signature: "6omr/04j3200bR6Z/0/3ZEAz/x4smy19///c/05frY109Qx7w////m100"
+
+Kernel                                    primary   AO        diffuse 
+---                                       ---       ---       ---
+fermi_speculative_while_while             696.29    748.23    424.30  
+kepler_dynamic_fetch                      854.89    1028.55   558.12
+pascal_stackless                          394.82    457.60    218.81
+tesla_persistent_speculative_while_while  253.51    851.51    424.22
+tesla_persistent_while_while              718.18    874.84    407.74
