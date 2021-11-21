@@ -40,7 +40,7 @@
 #define NODES_ARRAY_OF_STRUCTURES           // Define for AOS, comment out for SOA.
 #define TRIANGLES_ARRAY_OF_STRUCTURES       // Define for AOS, comment out for SOA.
 
-#define LOAD_BALANCER_BATCH_SIZE        96  // Number of rays to fetch at a time. Must be a multiple of 32.
+#define LOAD_BALANCER_BATCH_SIZE        32  // Number of rays to fetch at a time. Must be a multiple of 32.
 #define LOOP_NODE                       100 // Nodes: 1 = if, 100 = while.
 #define LOOP_TRI                        100 // Triangles: 1 = if, 100 = while.
 
@@ -64,17 +64,6 @@ TRACE_FUNC
 {
     // Temporary data stored in shared memory to reduce register pressure.
 
-    __shared__ RayStruct shared[32 * MaxBlockHeight + 1];
-    RayStruct* aux = shared + threadIdx.x + (blockDim.x * threadIdx.y);
-
-    // Traversal stack in CUDA thread-local memory.
-    // Allocate 3 additional entries for spilling rarely used variables.
-
-    int traversalIds[3];
-    traversalIds[0] = threadIdx.x; // Forced to local mem => saves a register.
-    traversalIds[1] = threadIdx.y;
-
-    float4 childBbox[3];
 
     // Live state during traversal, stored in registers.
 
@@ -85,6 +74,20 @@ TRACE_FUNC
     int     triAddr;                // Start of a pending triangle list.
     int     triAddr2;               // End of a pending triangle list.
     float   hitT;                   // t-value of the closest intersection.
+    int hitIndex;
+
+    float   tmin;
+    int     rayidx;
+    float   oodx;
+    float   oody;
+    float   oodz;
+    //float3 raydir; 
+    float   dirx;
+    float   diry;
+    float   dirz;
+    float   idirx;
+    float   idiry;
+    float   idirz;
 
 
     // Initialize persistent threads.
@@ -98,8 +101,8 @@ TRACE_FUNC
 
     do
     {
-        int tidx = traversalIds[0]; // threadIdx.x
-        int widx = traversalIds[1]; // threadIdx.y
+        int tidx = threadIdx.x; 
+        int widx = threadIdx.y;
         volatile int& localPoolRayCount = rayCountArray[widx];
         volatile int& localPoolNextRay = nextRayArray[widx];
 
@@ -114,7 +117,7 @@ TRACE_FUNC
         // Pick 32 rays from the local pool.
         // Out of work => done.
         {
-            int rayidx = localPoolNextRay + tidx;
+            rayidx = localPoolNextRay + tidx;
             if (rayidx >= numRays)
                 break;
 
@@ -129,13 +132,19 @@ TRACE_FUNC
             float4 o = FETCH_GLOBAL(rays, rayidx * 2 + 0, float4);
             float4 d = FETCH_GLOBAL(rays, rayidx * 2 + 1, float4);
             origx = o.x, origy = o.y, origz = o.z;
-            aux->tmin = o.w;
+            tmin = o.w;
+
+            dirx  = d.x;
+            diry  = d.y;
+            dirz  = d.z;
 
             float ooeps = exp2f(-80.0f); // Avoid div by zero.
-            aux->idirx = 1.0f / (fabsf(d.x) > ooeps ? d.x : copysignf(ooeps, d.x));
-            aux->idiry = 1.0f / (fabsf(d.y) > ooeps ? d.y : copysignf(ooeps, d.y));
-            aux->idirz = 1.0f / (fabsf(d.z) > ooeps ? d.z : copysignf(ooeps, d.z));
-            traversalIds[2] = rayidx; // Spill.
+            idirx = 1.0f / (fabsf(d.x) > ooeps ? d.x : copysignf(ooeps, d.x));
+            idiry = 1.0f / (fabsf(d.y) > ooeps ? d.y : copysignf(ooeps, d.y));
+            idirz = 1.0f / (fabsf(d.z) > ooeps ? d.z : copysignf(ooeps, d.z));
+            oodx  = origx * idirx;
+            oody  = origy * idiry;
+            oodz  = origz * idirz;
 
             // Setup traversal.
 
@@ -146,6 +155,7 @@ TRACE_FUNC
             triAddr2 = 0;
             STORE_RESULT(rayidx, -1, 0.0f); // No triangle intersected so far.
             hitT     = d.w; // tmax
+            hitIndex = -1;
 
             #ifdef DEBUG
             // check root data
@@ -176,15 +186,15 @@ TRACE_FUNC
             // we are an internal node
             // fetch node data
 
-            float4 cnodes=FETCH_TEXTURE(nodesA, nodeAddr*4+3, float4); // (c0, c1, p, dim)
+            const float4 cnodes=FETCH_TEXTURE(nodesA, nodeAddr*4+3, float4); // (c0, c1, p, dim)
             int nearChild = __float_as_int(cnodes.x);
             int farChild = __float_as_int(cnodes.y);
             int parent = __float_as_int(cnodes.z);
-            int nch_idx = 0;
-            int fch_idx = 1;
+            //int nch_idx = 0;
+            //int fch_idx = 1;
 
             // get near and far child
-            int dim = __float_as_int(cnodes.w);
+            //const int dim = __float_as_int(cnodes.w);
             #ifdef DEBUG
             if(dim < 0 || dim > 2){
                 printf("Wrong dimension!!!!");
@@ -194,7 +204,21 @@ TRACE_FUNC
 
             
 
-            float ray_dim = ((float*)aux)[dim];
+            //const float ray_dim = ((float*)&raydir)[dim];
+            /*
+            float ray_dim = 0.0f;
+            switch(dim){
+                case 0: 
+                    ray_dim = idirx;
+                    break;
+                case 1:
+                    ray_dim = idiry;
+                    break;
+                case 2:
+                    ray_dim = idirz;
+                    break;
+            }
+            */
 
             #ifdef DEBUG
             float ray_dim_2 = 0.0f;
@@ -216,12 +240,14 @@ TRACE_FUNC
             #endif
 
             // TODO: index based calculation
-            // float sign = copysignf (1.0f, ray_dim);
+            //float sign = copysignf (1.0f, ray_dim);
 
+            /*
             if(ray_dim < 0.0f){
                 swap(nearChild, farChild);
                 swap(nch_idx, fch_idx);
             }
+            */
 
             #ifdef DEBUG
             if(lastNodeAddr != parent && lastNodeAddr != nearChild && lastNodeAddr != farChild && lastNodeAddr != -1){
@@ -249,17 +275,14 @@ TRACE_FUNC
 
                 lastNodeAddr = nodeAddr;
                 nodeAddr = parent;
-
-
                 continue;
             }
 
             // if we come from parent -> nearChild, if we come from sibling -> farChild
-            int current_child = (lastNodeAddr == parent) ? nearChild : farChild;
+            const int current_child = (lastNodeAddr == parent) ? nearChild : farChild;
 
             // 0 if currentChild is c0, 1 if currentchild is c1
-            int current_child_idx = (lastNodeAddr == parent) ? nch_idx : fch_idx;
-
+            const int current_child_idx = (lastNodeAddr == parent) ? 0 : 1;
 
             #ifdef DEBUG
 
@@ -271,24 +294,20 @@ TRACE_FUNC
             #endif
 
             // fetch additional node data: 
-            float4 nxy = FETCH_TEXTURE(nodesA, nodeAddr*4+current_child_idx, float4);  // (c0/1.lo.x, c0/1.hi.x, c0/1.lo.y, c0/1.hi.y)
-            float4 nz   = FETCH_TEXTURE(nodesA, nodeAddr*4+2, float4);  // (c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)
+            const float4 nxy = FETCH_TEXTURE(nodesA, nodeAddr*4+current_child_idx, float4);  // (c0/1.lo.x, c0/1.hi.x, c0/1.lo.y, c0/1.hi.y)
+            const float4 nz   = FETCH_TEXTURE(nodesA, nodeAddr*4+2, float4);  // (c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)
             
 
             // Intersect the ray against the current Child node
                 
-                float oodx  = origx * aux->idirx;
-                float oody  = origy * aux->idiry;
-                float oodz  = origz * aux->idirz;
-                float c0lox = nxy.x * aux->idirx - oodx;
-                float c0hix = nxy.y * aux->idirx - oodx;
-                float c0loy = nxy.z * aux->idiry - oody;
-                float c0hiy = nxy.w * aux->idiry - oody;
+                const float c0lox = nxy.x * idirx - oodx;
+                const float c0hix = nxy.y * idirx - oodx;
+                const float c0loy = nxy.z * idiry - oody;
+                const float c0hiy = nxy.w * idiry - oody;
 
                 float nz_x;
                 float nz_y;
 
-                // TODO: replace branch with pointer arith.
                 if(current_child_idx == 0){
                     nz_x = nz.x;
                     nz_y = nz.y;
@@ -297,19 +316,24 @@ TRACE_FUNC
                     nz_y = nz.w;
                 }
                 
-                float c0loz = nz_x * aux->idirz - oodz;
-                float c0hiz = nz_y * aux->idirz - oodz;
+                const float c0loz = nz_x * idirz - oodz;
+                const float c0hiz = nz_y * idirz - oodz;
+                
+                const float c0min = spanBeginKepler(c0lox, c0hix, c0loy, c0hiy, c0loz, c0hiz, tmin);
+                const float c0max = spanEndKepler  (c0lox, c0hix, c0loy, c0hiy, c0loz, c0hiz, hitT);
+                //float c0min = max4(fminf(c0lox, c0hix), fminf(c0loy, c0hiy), fminf(c0loz, c0hiz), aux->tmin);
+                //float c0max = min4(fmaxf(c0lox, c0hix), fmaxf(c0loy, c0hiy), fmaxf(c0loz, c0hiz), hitT);
+                const int traverseCurrentChild = (c0max >= c0min);
 
-                float c0min = max4(fminf(c0lox, c0hix), fminf(c0loy, c0hiy), fminf(c0loz, c0hiz), aux->tmin);
-                float c0max = min4(fmaxf(c0lox, c0hix), fmaxf(c0loy, c0hiy), fmaxf(c0loz, c0hiz), hitT);
-                bool traverseCurrentChild = (c0max >= c0min);
-
-
+            //const int isNearChild = current_child == nearChild;
+            //lastNodeAddr = traverseCurrentChild*nodeAddr + (1-traverseCurrentChild)*(isNearChild*nearChild +(1-isNearChild)*nodeAddr);
+            //nodeAddr = traverseCurrentChild*current_child + (1-traverseCurrentChild)*((1-isNearChild)*parent + isNearChild*nodeAddr);
+            
+            
             if(traverseCurrentChild){
                 // if we hit the BB -> go down a level
                 lastNodeAddr = nodeAddr;
                 nodeAddr = current_child;
-               
             }else{
                 // otherwise:
                 // if we are nearChild  -> go to far child
@@ -322,11 +346,11 @@ TRACE_FUNC
                 }
                 continue;
             }
-
+            
 
             // if the child we want to go to is a leaf: do triangle instersection - and skip
              if (nodeAddr < 0 && triAddr >= triAddr2){
-                float4 leaf=FETCH_TEXTURE(nodesA, (-nodeAddr-1)*4+3, float4);
+                const float4 leaf=FETCH_TEXTURE(nodesA, (-nodeAddr-1)*4+3, float4);
                 
                 // skip child
                 // goto next node: either sibling or parent
@@ -345,33 +369,33 @@ TRACE_FUNC
             {
                 // Compute and check intersection t-value.
 
-                float4 v00 = FETCH_GLOBAL(trisA, triAddr*4+0, float4);
-                float4 v11 = FETCH_GLOBAL(trisA, triAddr*4+1, float4);
+                const float4 v00 = FETCH_GLOBAL(trisA, triAddr*4+0, float4);
+                const float4 v11 = FETCH_GLOBAL(trisA, triAddr*4+1, float4);
+                const float4 v22 = FETCH_GLOBAL(trisA, triAddr*4+2, float4);
 
-                float dirx  = 1.0f / aux->idirx;
-                float diry  = 1.0f / aux->idiry;
-                float dirz  = 1.0f / aux->idirz;
+                //const float dirx  = 1.0f / idirx;
+                //const float diry  = 1.0f / idiry;
+                //const float dirz  = 1.0f / idirz;
 
-                float Oz = v00.w - origx*v00.x - origy*v00.y - origz*v00.z;
-                float invDz = 1.0f / (dirx*v00.x + diry*v00.y + dirz*v00.z);
+                const float Oz = v00.w - origx*v00.x - origy*v00.y - origz*v00.z;
+                const float invDz = 1.0f / (dirx*v00.x + diry*v00.y + dirz*v00.z);
                 float t = Oz * invDz;
 
-                if (t > aux->tmin && t < hitT)
+                if (t > tmin && t < hitT)
                 {
                     // Compute and check barycentric u.
 
-                    float Ox = v11.w + origx*v11.x + origy*v11.y + origz*v11.z;
-                    float Dx = dirx*v11.x + diry*v11.y + dirz*v11.z;
-                    float u = Ox + t*Dx;
+                    const float Ox = v11.w + origx*v11.x + origy*v11.y + origz*v11.z;
+                    const float Dx = dirx*v11.x + diry*v11.y + dirz*v11.z;
+                    const float u = Ox + t*Dx;
 
                     if (u >= 0.0f)
                     {
                         // Compute and check barycentric v.
-                        float4 v22 = FETCH_GLOBAL(trisA, triAddr*4+2, float4);
-
-                        float Oy = v22.w + origx*v22.x + origy*v22.y + origz*v22.z;
-                        float Dy = dirx*v22.x + diry*v22.y + dirz*v22.z;
-                        float v = Oy + t*Dy;
+                    
+                        const float Oy = v22.w + origx*v22.x + origy*v22.y + origz*v22.z;
+                        const float Dy = dirx*v22.x + diry*v22.y + dirz*v22.z;
+                        const float v = Oy + t*Dy;
 
                         if (v >= 0.0f && u + v <= 1.0f)
                         {
@@ -379,7 +403,7 @@ TRACE_FUNC
                             // Closest intersection not required => terminate.
 
                             hitT = t;
-                            STORE_RESULT(traversalIds[2], FETCH_GLOBAL(triIndices, triAddr, int), t);
+                            hitIndex = triAddr;
 
                             if (anyHit)
                             {
@@ -398,7 +422,11 @@ trace_loop_end:
             ;
 
 
-        }while(nodeAddr >= 0 || triAddr < triAddr2); // we returned to the root
+        }while(nodeAddr >= 0); // we returned to the root
+
+        if (hitIndex == -1) { STORE_RESULT(rayidx, -1, hitT); }
+        else                { STORE_RESULT(rayidx, FETCH_TEXTURE(triIndices, hitIndex, int), hitT); }
+
         /*
         #ifdef DEBUG
         if(found_tri == 0){
@@ -406,7 +434,7 @@ trace_loop_end:
         }
         #endif
         */
-    } while(aux); // persistent threads (always true)
+    } while(true); // persistent threads (always true)
 }
 
 //------------------------------------------------------------------------
