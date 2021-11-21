@@ -38,13 +38,23 @@ CudaBVH::CudaBVH(const BVH& bvh, BVHLayout layout)
 
     if (layout == BVHLayout_Compact)
     {
-        createCompact(bvh,1);
+        createCompact(bvh,1, false);
         return;
     }
 
     if (layout == BVHLayout_Compact2)
     {
-        createCompact(bvh,16);
+        createCompact(bvh,16, false);
+        return;
+    }
+
+    if(layout == BVHLayout_Compact_Stackless){
+        createCompact(bvh,1, true);
+        return;
+    }
+
+    if(layout == BVHLayout_Compact2_Stackless){
+        createCompact(bvh,16, true);
         return;
     }
 
@@ -265,14 +275,14 @@ void CudaBVH::createTriIndexBasic(const BVH& bvh)
 
 //------------------------------------------------------------------------
 
-void CudaBVH::createCompact(const BVH& bvh, int nodeOffsetSizeDiv)
+void CudaBVH::createCompact(const BVH& bvh, int nodeOffsetSizeDiv, bool stackless)
 {
     struct StackEntry
     {
         const BVHNode*  node;
         S32             idx;
-
-        StackEntry(const BVHNode* n = NULL, int i = 0) : node(n), idx(i) {}
+        S32             parent_idx;
+        StackEntry(const BVHNode* n = NULL, int i = 0, int p = 0) : node(n), idx(i), parent_idx(p) {}
     };
 
     // Construct data.
@@ -280,11 +290,18 @@ void CudaBVH::createCompact(const BVH& bvh, int nodeOffsetSizeDiv)
     Array<Vec4i> nodeData(NULL, 4);
     Array<Vec4i> triWoopData;
     Array<S32> triIndexData;
-    Array<StackEntry> stack(StackEntry(bvh.getRoot(), 0));
+    Array<StackEntry> stack(StackEntry(bvh.getRoot(), 0, 0x76543210));
+
+    
 
     while (stack.getSize())
     {
         StackEntry e = stack.removeLast();
+
+        if (e.idx == 0) {
+            printf("compact2 root parent: %x\n", e.parent_idx);
+        }
+
         FW_ASSERT(e.node->getNumChildNodes() == 2);
         const AABB* cbox[2];
         int cidx[2];
@@ -300,7 +317,7 @@ void CudaBVH::createCompact(const BVH& bvh, int nodeOffsetSizeDiv)
             if (!child->isLeaf())
             {
                 cidx[i] = nodeData.getNumBytes() / nodeOffsetSizeDiv;
-                stack.add(StackEntry(child, nodeData.getSize()));
+                stack.add(StackEntry(child, nodeData.getSize(), e.idx));
                 nodeData.add(NULL, 4);
                 continue;
             }
@@ -326,13 +343,23 @@ void CudaBVH::createCompact(const BVH& bvh, int nodeOffsetSizeDiv)
             triIndexData.add(0);
         }
 
+        Vec4i extra_data;
+       
+        if(stackless){
+            S32 ord = getChildOrderDim(cbox[0], cbox[1]);
+            int p = e.parent_idx; // no need to encode since it has to be an internal node
+            extra_data = Vec4i(cidx[0], cidx[1], p, ord);
+        }else{
+            extra_data = Vec4i(cidx[0], cidx[1], 0, 0);
+        }
+
         // Write entry.
 
         Vec4i* dst = nodeData.getPtr(e.idx);
         dst[0] = Vec4i(floatToBits(cbox[0]->min().x), floatToBits(cbox[0]->max().x), floatToBits(cbox[0]->min().y), floatToBits(cbox[0]->max().y));
         dst[1] = Vec4i(floatToBits(cbox[1]->min().x), floatToBits(cbox[1]->max().x), floatToBits(cbox[1]->min().y), floatToBits(cbox[1]->max().y));
         dst[2] = Vec4i(floatToBits(cbox[0]->min().z), floatToBits(cbox[0]->max().z), floatToBits(cbox[1]->min().z), floatToBits(cbox[1]->max().z));
-        dst[3] = Vec4i(cidx[0], cidx[1], 0, 0);
+        dst[3] = extra_data;
     }
 
     // Write to buffers.

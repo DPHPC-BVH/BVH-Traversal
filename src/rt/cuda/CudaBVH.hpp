@@ -111,7 +111,7 @@ private:
     void        createNodeBasic     (const BVH& bvh);
     void        createTriWoopBasic  (const BVH& bvh);
     void        createTriIndexBasic (const BVH& bvh);
-    void        createCompact       (const BVH& bvh, int nodeOffsetSizeDiv);
+    void        createCompact       (const BVH& bvh, int nodeOffsetSizeDiv, bool stackless);
 
     void        woopifyTri          (const BVH& bvh, int idx);
 

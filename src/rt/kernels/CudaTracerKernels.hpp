@@ -51,6 +51,8 @@ enum BVHLayout
     BVHLayout_Compact,                  // Variant of BVHLayout_AOS_AOS with implicit leaf nodes.
     BVHLayout_Compact2,                 // Variant of BVHLayout_AOS_AOS with implicit leaf nodes.
     BVHLayout_Stackless,                // New: Variant of BVHLayout_AOS_AOS, which includes parent indices and an implicit traversal order
+    BVHLayout_Compact_Stackless,        // New: Variant of BVHLayout_Stackless, with implicit leaf nodes.
+    BVHLayout_Compact2_Stackless,        // New: Variant of BVHLayout_Stackless, with implicit leaf nodes.
 
     BVHLayout_Max
 };
