@@ -1,4 +1,3 @@
-
 /*
  *  Copyright (c) 2009-2011, NVIDIA Corporation
  *  All rights reserved.
@@ -42,6 +41,8 @@
 
 //------------------------------------------------------------------------
 
+#define DEBUG 1
+
 #define DYNAMIC_FETCH_THRESHOLD 20          // If fewer than this active, fetch new rays
 
 extern "C" __device__ int g_warpCounter;    // Work counter for persistent threads.
@@ -65,8 +66,10 @@ TRACE_FUNC
     // Live state during traversal, stored in registers.
 
     float   origx, origy, origz;            // Ray origin.
-    int     nodeAddr = EntrypointSentinel;                   
-    int     lastNodeAddr;
+    char*   stackPtr;                       // Current position in traversal stack.
+    int     leafAddr;                       // First postponed leaf, non-negative if none.
+    int     lastNodeAddr;                   // Parent node
+    int     nodeAddr = EntrypointSentinel;  // Non-negative: current internal node, negative: second postponed leaf.
     int     hitIndex;                       // Triangle index of the closest intersection, -1 if none.
     float   hitT;                           // t-value of the closest intersection.
     float   tmin;
@@ -94,10 +97,16 @@ TRACE_FUNC
 
         // Fetch new rays from the global pool using lane 0.
 
-        const bool          terminated     = nodeAddr == EntrypointSentinel;
+        const bool          terminated     = nodeAddr==EntrypointSentinel;
         const unsigned int  maskTerminated = __ballot(terminated);
         const int           numTerminated  = __popc(maskTerminated);
         const int           idxTerminated  = __popc(maskTerminated & ((1u<<tidx)-1));
+
+        #ifdef DEBUG1
+            float4 croot=FETCH_TEXTURE(nodesA, 3, float4); // (c0, c1, p, dim)
+            int root_parent = __float_as_int(croot.z);
+            printf("Root Parent: %x\n", root_parent);
+        #endif
 
         if(terminated)
         {
@@ -130,20 +139,35 @@ TRACE_FUNC
 
             // Setup traversal.
 
+            leafAddr = 0;   // No postponed leaf.
             nodeAddr = 0;   // Start from the root.
             lastNodeAddr = EntrypointSentinel;
             hitIndex = -1;  // No triangle intersected so far.
         }
 
-        
-        do
+        // Traversal loop.
+
+        while(nodeAddr != EntrypointSentinel)
         {
+            int current_child;
+            #ifdef DEBUG1
+                printf("Entered Main loop iteration: %i\n", nodeAddr);
+            #endif
             // Traverse internal nodes until all SIMD lanes have found a leaf.
 
 //          while (nodeAddr >= 0 && nodeAddr != EntrypointSentinel)
-            //while (unsigned int(nodeAddr) < unsigned int(EntrypointSentinel))   // functionally equivalent, but faster
-           
-                const float4 cnodes=FETCH_TEXTURE(nodesA, nodeAddr+3, float4); // (c0, c1, p, dim)
+            while (unsigned int(nodeAddr) < unsigned int(EntrypointSentinel))   // functionally equivalent, but faster
+            {
+                // Fetch AABBs of the two child nodes.
+
+                #ifdef DEBUG1
+                    if(nodeAddr != 0){
+                        printf("Entered Main loop iteration (not root): %i\n", nodeAddr);
+                    }
+                    
+                #endif
+
+                float4 cnodes=FETCH_TEXTURE(nodesA, nodeAddr+3, float4); // (c0, c1, p, dim)
                 int nearChild = __float_as_int(cnodes.x);
                 int farChild = __float_as_int(cnodes.y);
                 int parent = __float_as_int(cnodes.z);
@@ -151,10 +175,9 @@ TRACE_FUNC
                 int fch_idx = 1;
 
                 // get near and far child
-                const int dim = __float_as_int(cnodes.w);
+                int dim = __float_as_int(cnodes.w);
 
                 float ray_dim = 0.0f;
-
                 switch(dim){
                     case 0: 
                         ray_dim = idirx;
@@ -162,11 +185,10 @@ TRACE_FUNC
                     case 1:
                         ray_dim = idiry;
                         break;
-                    case 2:
+                case 2:
                         ray_dim = idirz;
                         break;
                 }
-
 
                 if(ray_dim < 0.0f){
                     swap(nearChild, farChild);
@@ -180,22 +202,20 @@ TRACE_FUNC
                 }
 
                 // if we come from parent -> nearChild, if we come from sibling -> farChild
-                const int current_child = (lastNodeAddr == parent) ? nearChild : farChild;
+                current_child = (lastNodeAddr == parent) ? nearChild : farChild;
 
                 // 0 if currentChild is c0, 1 if currentchild is c1
                 const int current_child_idx = (lastNodeAddr == parent) ? nch_idx : fch_idx;
 
-
-                // fetch additional node data: 
+                
                 const float4 nxy = FETCH_TEXTURE(nodesA, nodeAddr+current_child_idx, float4);  // (c0/1.lo.x, c0/1.hi.x, c0/1.lo.y, c0/1.hi.y)
                 const float4 nz   = FETCH_TEXTURE(nodesA, nodeAddr+2, float4);  // (c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)
-            
 
-                // Intersect the ray against the current Child node
                 const float c0lox = nxy.x * idirx - oodx;
                 const float c0hix = nxy.y * idirx - oodx;
                 const float c0loy = nxy.z * idiry - oody;
                 const float c0hiy = nxy.w * idiry - oody;
+
                 float nz_x;
                 float nz_y;
 
@@ -212,15 +232,20 @@ TRACE_FUNC
                 const float c0hiz = nz_y * idirz - oodz;
                 const float c0min = spanBeginKepler(c0lox, c0hix, c0loy, c0hiy, c0loz, c0hiz, tmin);
                 const float c0max = spanEndKepler  (c0lox, c0hix, c0loy, c0hiy, c0loz, c0hiz, hitT);
-
+                //float c0min = max4(fminf(c0lox, c0hix), fminf(c0loy, c0hiy), fminf(c0loz, c0hiz), aux->tmin);
+                //float c0max = min4(fmaxf(c0lox, c0hix), fmaxf(c0loy, c0hiy), fmaxf(c0loz, c0hiz), hitT);
                 const int traverseCurrentChild = (c0max >= c0min);
 
                 if(traverseCurrentChild){
                     // if we hit the BB -> go down a level
                     lastNodeAddr = nodeAddr;
                     nodeAddr = current_child;
+                     #ifdef DEBUG1
+                        printf("Found intersection: %i\n", nodeAddr);
+                    #endif
                
                 }else{
+        
                     // otherwise:
                     // if we are nearChild  -> go to far child
                     // else                 -> go up a level
@@ -230,21 +255,55 @@ TRACE_FUNC
                         lastNodeAddr = nodeAddr;
                         nodeAddr = parent;
                     }
+                
                     continue;
                 }
-                
-            
 
-            // Process leaf node.
+                // c
+                /*
+                if (nodeAddr < 0 && leafAddr >= 0){
+                    #ifdef DEBUG1
+                        printf("Found leaf: %i\n", nodeAddr);
+                    #endif
+                    leafAddr = nodeAddr;
+                    nodeAddr = lastNodeAddr;
+                    lastNodeAddr = current_child;
+                }
+                */
 
-             if (nodeAddr < 0){
+                // All SIMD lanes have found a leaf? => process them.
+
+                // NOTE: inline PTX implementation of "if(!__any(leafAddr >= 0)) break;".
+                // tried everything with CUDA 4.2 but always got several redundant instructions.
+                /*
+                unsigned int mask;
+                asm("{\n"
+                    "   .reg .pred p;               \n"
+                    "setp.ge.s32        p, %1, 0;   \n"
+                    "vote.ballot.b32    %0,p;       \n"
+                    "}"
+                    : "=r"(mask)
+                    : "r"(leafAddr));
+                if(!mask){
+                    #ifdef DEBUG1
+                        printf("Warp got out: %i\n", nodeAddr);
+                    #endif
+                    break;
+                }
+                */
+                    
+
+                //if(!__any(leafAddr >= 0))
+                //    break;
+            }
+
+            // Process postponed leaf nodes.
+
+            while (leafAddr < 0)
+            {
                 nodeAddr = lastNodeAddr;
                 lastNodeAddr = current_child;
-            }
-            // todo replace
-            while (nodeAddr < 0)
-            {
-                for (int triAddr = ~nodeAddr;; triAddr += 3)
+                for (int triAddr = ~leafAddr;; triAddr += 3)
                 {
                     // Tris in TEX (good to fetch as a single batch)
                     const float4 v00 = tex1Dfetch(t_trisA, triAddr + 0);
@@ -291,14 +350,28 @@ TRACE_FUNC
                         }
                     }
                 } // triangle
-            } 
+                // finished leaf
+                //leafAddr = 0;
+
+                // Another leaf was postponed => process it as well.
+
+//              if(leafAddr2<0) { leafAddr = leafAddr2; leafAddr2=0; } else     // postpone2
+                /*{
+                    leafAddr = nodeAddr;
+                    if (nodeAddr < 0)
+                    {
+                        nodeAddr = *(int*)stackPtr;
+                        stackPtr -= 4;
+                    }
+                }*/
+            } // leaf
 
             // DYNAMIC FETCH
 
             if( __popc(__ballot(true)) < DYNAMIC_FETCH_THRESHOLD )
                 break;
 
-        } while(nodeAddr != EntrypointSentinel); // traversal
+        } // traversal
 
         // Remap intersected triangle index, and store the result.
 

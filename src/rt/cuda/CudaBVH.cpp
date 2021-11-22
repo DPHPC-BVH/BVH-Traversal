@@ -281,8 +281,9 @@ void CudaBVH::createCompact(const BVH& bvh, int nodeOffsetSizeDiv, bool stackles
     {
         const BVHNode*  node;
         S32             idx;
+        S32             real_idx;
         S32             parent_idx;
-        StackEntry(const BVHNode* n = NULL, int i = 0, int p = 0) : node(n), idx(i), parent_idx(p) {}
+        StackEntry(const BVHNode* n = NULL, int i = 0, int ridx=0, int p = 0) : node(n), idx(i), real_idx(ridx), parent_idx(p) {}
     };
 
     // Construct data.
@@ -290,7 +291,7 @@ void CudaBVH::createCompact(const BVH& bvh, int nodeOffsetSizeDiv, bool stackles
     Array<Vec4i> nodeData(NULL, 4);
     Array<Vec4i> triWoopData;
     Array<S32> triIndexData;
-    Array<StackEntry> stack(StackEntry(bvh.getRoot(), 0, 0x76543210));
+    Array<StackEntry> stack(StackEntry(bvh.getRoot(), 0, 0, 0x76543210));
 
     
 
@@ -300,6 +301,14 @@ void CudaBVH::createCompact(const BVH& bvh, int nodeOffsetSizeDiv, bool stackles
 
         if (e.idx == 0) {
             printf("compact2 root parent: %x\n", e.parent_idx);
+        }
+
+        /*if (e.real_idx == 64 || e.real_idx == 128) {
+            printf("compact2 root child %i parent: %i\n", e.real_idx, e.parent_idx);
+        }*/
+
+        if (e.parent_idx == 0) {
+            printf("compact: node %i is child of root \n", e.real_idx, e.parent_idx);
         }
 
         FW_ASSERT(e.node->getNumChildNodes() == 2);
@@ -317,7 +326,11 @@ void CudaBVH::createCompact(const BVH& bvh, int nodeOffsetSizeDiv, bool stackles
             if (!child->isLeaf())
             {
                 cidx[i] = nodeData.getNumBytes() / nodeOffsetSizeDiv;
-                stack.add(StackEntry(child, nodeData.getSize(), e.idx));
+                if (e.idx == 0) {
+                    printf("compact2 root child %i: %i\n", i, cidx[i]);
+                }
+                
+                stack.add(StackEntry(child, nodeData.getSize(), cidx[i], e.real_idx));
                 nodeData.add(NULL, 4);
                 continue;
             }
