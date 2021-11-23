@@ -28,6 +28,7 @@
 #include "cuda/CudaTracer.hpp"
 #include "gui/Window.hpp"
 #include "io/File.hpp"
+#include <cuda_profiler_api.h>
 
 using namespace FW;
 
@@ -153,8 +154,11 @@ F32 CudaTracer::traceBatch(RayBuffer& rays)
     int numBlocks = (desiredWarps + blockWarps - 1) / blockWarps;
 
     // Launch.
-
-    return kernel.launchTimed(numBlocks * blockSize.x * blockSize.y, blockSize);
+    // Profile the ray tracing kernel
+    cudaProfilerStart();
+    F32 time = kernel.launchTimed(numBlocks * blockSize.x * blockSize.y, blockSize);
+    cudaProfilerStop();
+    return time;
 }
 
 //------------------------------------------------------------------------
