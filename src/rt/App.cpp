@@ -706,6 +706,7 @@ void FW::runBenchmark(
 
             F32 mraysPerSec = (F32)totalRays / totalLaunchTime * 1.0e-6f;
             results.add(mraysPerSec);
+            printf("ms/frame = %.2f\n", totalLaunchTime / ((F32)measureRepeats));
             printf("Mrays/s = %.2f\n", mraysPerSec);
             printf("\n");
         }

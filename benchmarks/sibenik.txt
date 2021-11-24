@@ -1,0 +1,15 @@
+camera signatures: --camera="ytIa02G35kz1i:ZZ/0//iSay/5W6Ex19///c/05frY109Qx7w////m100" --camera=":Wp802ACAD/2x9OQ/0/waE8z/IOKbx/9///c/05frY109Qx7w////m100" --camera="CFtpy/s6ea/28btX/0172CFy/K5g1z/9///c/05frY109Qx7w////m100" --camera="steO/0TlN1z1tsDg/03InaMz/bqZxx/9///c/05frY109Qx7w////m100" --camera="HJv//034:Rx1S4Xh/03dpXux1BVmGw/9///c/05frY109Qx7w////m100"
+
+Kernel                                    primary   AO        diffuse
+---                                       ---       ---       ---     
+kepler_dynamic_fetch                      849.13    1553.69   472.51    
+fermi_speculative_while_while             876.98    1442.04   331.09    
+tesla_persistent_packet                   712.74    1492.41   216.52    
+tesla_persistent_speculative_while_while  795.50    1421.71   373.01    
+tesla_persistent_while_while              778.72    1655.77   351.85    
+pascal_persistent_stackless               431.48    883.31    186.88    
+pascal_persistent_stackless_opt3          480.83    920.61    208.76    
+pascal_persistent_stackless_opt5          430.58    1010.71   167.29    
+pascal_stackless_opt3                     534.46    1033.25   235.49    
+pascal_stackless_opt5                     497.01    1159.41   222.93    
+---                                       ---       ---       ---   

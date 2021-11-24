@@ -2,8 +2,14 @@ camera signature: "cIxMx/sK/Ty/EFu3z/5CKevx/QMnry/8///m007toC10AnAHx///Uy200"
 
 Kernel                                    primary   AO        diffuse
 ---                                       ---       ---       ---     
-fermi_speculative_while_while             457.11    279.39    252.22
-kepler_dynamic_fetch                      638.78    497.06    417.52
-pascal_stackless                          276.65    196.63    152.03
-tesla_persistent_speculative_while_while  250.79    305.12    301.85
-tesla_persistent_while_while              492.04    361.68    285.61
+kepler_dynamic_fetch                      550.16    862.24    417.68    
+fermi_speculative_while_while             540.54    670.72    254.66    
+tesla_persistent_packet                   421.23    479.33    142.49    
+tesla_persistent_speculative_while_while  456.82    712.19    302.44    
+tesla_persistent_while_while              437.69    726.52    287.44    
+pascal_persistent_stackless               229.17    373.48    151.12    
+pascal_persistent_stackless_opt3          286.90    431.73    172.97    
+pascal_persistent_stackless_opt5          227.63    443.73    156.10    
+pascal_stackless_opt3                     316.05    471.94    194.15    
+pascal_stackless_opt5                     282.29    549.73    205.17    
+---                                       ---       ---       ---   

@@ -1,9 +1,17 @@
-camera signature: "6omr/04j3200bR6Z/0/3ZEAz/x4smy19///c/05frY109Qx7w////m100"
+camera signatures: --camera="6omr/04j3200bR6Z/0/3ZEAz/x4smy19///c/05frY109Qx7w////m100" --camera="Lpmr/07k3200CS6Z/0/QqOIz1qfnsx19///c/05frY109Qx7w////m100" --camera="Y1BR00IkZd/0aA9X/0/Gy8Px1ca7Tw19///c/05frY109Qx7w////m100" --camera="XYDl00Gqv600byxY/00IQE4x/jN1jx/9///c/05frY109Qx7w////m100" --camera="w:ie00yxXX00ND1b/03TZ6qy1egt3x/9///c/05frY109Qx7w////m100"
+Warmup batches: 2
+Measurment batches: 10
 
 Kernel                                    primary   AO        diffuse 
 ---                                       ---       ---       ---
-fermi_speculative_while_while             696.29    748.23    424.30  
-kepler_dynamic_fetch                      854.89    1028.55   558.12
-pascal_stackless                          394.82    457.60    218.81
-tesla_persistent_speculative_while_while  253.51    851.51    424.22
-tesla_persistent_while_while              718.18    874.84    407.74
+kepler_dynamic_fetch                      918.56    1152.63   586.55    
+fermi_speculative_while_while             945.65    1065.16   474.13    
+tesla_persistent_packet                   624.28    635.95    237.39    
+tesla_persistent_speculative_while_while  773.00    1021.12   444.41    
+tesla_persistent_while_while              741.56    1016.29   427.33    
+pascal_persistent_stackless               423.30    541.87    230.06    
+pascal_persistent_stackless_opt3          523.38    602.75    266.48    
+pascal_persistent_stackless_opt5          462.39    662.55    208.78    
+pascal_stackless_opt3                     573.38    662.81    292.91    
+pascal_stackless_opt5                     544.50    816.98    269.68    
+---                                       ---       ---       ---       
