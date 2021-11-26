@@ -39,6 +39,11 @@ CudaTracer::CudaTracer(void)
 {
     CudaModule::staticInit();
     m_compiler.addOptions("-use_fast_math");
+
+    m_numTraced = 0;
+    m_profileInterval = 5;
+    m_numProfiled = 0;
+    m_numTotalProfile = 50;
 }
 
 //------------------------------------------------------------------------
@@ -74,6 +79,10 @@ void CudaTracer::setKernel(const String& kernelName)
 
     module->getKernel("queryConfig").launch(1, 1);
     m_kernelConfig = *(const KernelConfig*)module->getGlobal("g_config").getPtr();
+
+    // Reset number of batches of rays traced and profiled to 0, because we are setting a new kernel.
+    m_numTraced = 0;
+    m_numProfiled = 0;
 }
 
 //------------------------------------------------------------------------
@@ -154,10 +163,16 @@ F32 CudaTracer::traceBatch(RayBuffer& rays)
     int numBlocks = (desiredWarps + blockWarps - 1) / blockWarps;
 
     // Launch.
-    // Profile the ray tracing kernel
-    cudaProfilerStart();
+    bool bShouldProfileThisLaunch = m_numTraced % m_profileInterval == 0 && m_numProfiled < m_numTotalProfile;
+    if (bShouldProfileThisLaunch) {
+        cudaProfilerStart();
+    }
     F32 time = kernel.launchTimed(numBlocks * blockSize.x * blockSize.y, blockSize);
-    cudaProfilerStop();
+    if (bShouldProfileThisLaunch) {
+        cudaProfilerStop();
+        ++m_numProfiled;
+    }
+    ++m_numTraced;
     return time;
 }
 
