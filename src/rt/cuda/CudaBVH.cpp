@@ -299,17 +299,19 @@ void CudaBVH::createCompact(const BVH& bvh, int nodeOffsetSizeDiv, bool stackles
     {
         StackEntry e = stack.removeLast();
 
+        /*
         if (e.idx == 0) {
             printf("compact2 root parent: %x\n", e.parent_idx);
         }
 
-        /*if (e.real_idx == 64 || e.real_idx == 128) {
-            printf("compact2 root child %i parent: %i\n", e.real_idx, e.parent_idx);
-        }*/
+        if (e.real_idx == 64 || e.real_idx == 128) {
+            printf("compact2 root child %i (idx: %i) parent: %i\n", e.real_idx, e.idx, e.parent_idx);
+        }
 
         if (e.parent_idx == 0) {
             printf("compact: node %i is child of root \n", e.real_idx, e.parent_idx);
         }
+        */
 
         FW_ASSERT(e.node->getNumChildNodes() == 2);
         const AABB* cbox[2];
@@ -327,7 +329,7 @@ void CudaBVH::createCompact(const BVH& bvh, int nodeOffsetSizeDiv, bool stackles
             {
                 cidx[i] = nodeData.getNumBytes() / nodeOffsetSizeDiv;
                 if (e.idx == 0) {
-                    printf("compact2 root child %i: %i\n", i, cidx[i]);
+                    printf("compact2 root child %i (nodedata_size: %i): %i\n", i, nodeData.getSize(), cidx[i]);
                 }
                 
                 stack.add(StackEntry(child, nodeData.getSize(), cidx[i], e.real_idx));
@@ -368,7 +370,22 @@ void CudaBVH::createCompact(const BVH& bvh, int nodeOffsetSizeDiv, bool stackles
 
         // Write entry.
 
+        // TODO try to adjust with nodeData.getPtr
+
+     
+        if (e.idx == 0) {
+            printf("children of root \n", cidx[0], cidx[1]);
+        }
+
+        if (e.real_idx == 64 || e.real_idx == 128) {
+            printf("compact2 root child %i parent: %i\n", e.real_idx, e.parent_idx);
+        }
+
+        
+
+
         Vec4i* dst = nodeData.getPtr(e.idx);
+        
         dst[0] = Vec4i(floatToBits(cbox[0]->min().x), floatToBits(cbox[0]->max().x), floatToBits(cbox[0]->min().y), floatToBits(cbox[0]->max().y));
         dst[1] = Vec4i(floatToBits(cbox[1]->min().x), floatToBits(cbox[1]->max().x), floatToBits(cbox[1]->min().y), floatToBits(cbox[1]->max().y));
         dst[2] = Vec4i(floatToBits(cbox[0]->min().z), floatToBits(cbox[0]->max().z), floatToBits(cbox[1]->min().z), floatToBits(cbox[1]->max().z));
