@@ -59,6 +59,11 @@ private:
     String              m_kernelName;
     KernelConfig        m_kernelConfig;
     CudaBVH*            m_bvh;
+    // For profiling.
+    S32                 m_numTraced;
+    S32                 m_profileInterval;
+    S32                 m_numProfiled;
+    S32                 m_numTotalProfile;
 };
 
 //------------------------------------------------------------------------
