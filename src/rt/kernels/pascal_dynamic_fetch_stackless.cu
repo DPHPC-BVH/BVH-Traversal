@@ -41,8 +41,6 @@
 
 //------------------------------------------------------------------------
 
-#define DEBUG 1
-
 #define DYNAMIC_FETCH_THRESHOLD 20          // If fewer than this active, fetch new rays
 
 extern "C" __device__ int g_warpCounter;    // Work counter for persistent threads.
@@ -63,13 +61,15 @@ TRACE_FUNC
 {
     // Traversal stack in CUDA thread-local memory.
 
+
     // Live state during traversal, stored in registers.
 
     float   origx, origy, origz;            // Ray origin.
     char*   stackPtr;                       // Current position in traversal stack.
     int     leafAddr;                       // First postponed leaf, non-negative if none.
-    int     lastNodeAddr;                   // Parent node
+    int     leafAddr2;                      // Second postponed leaf, non-negative if none.
     int     nodeAddr = EntrypointSentinel;  // Non-negative: current internal node, negative: second postponed leaf.
+    int     lastNodeAddr;
     int     hitIndex;                       // Triangle index of the closest intersection, -1 if none.
     float   hitT;                           // t-value of the closest intersection.
     float   tmin;
@@ -101,12 +101,6 @@ TRACE_FUNC
         const unsigned int  maskTerminated = __ballot(terminated);
         const int           numTerminated  = __popc(maskTerminated);
         const int           idxTerminated  = __popc(maskTerminated & ((1u<<tidx)-1));
-
-        #ifdef DEBUG1
-            float4 croot=FETCH_TEXTURE(nodesA, 3, float4); // (c0, c1, p, dim)
-            int root_parent = __float_as_int(croot.z);
-            printf("Root Parent: %x\n", root_parent);
-        #endif
 
         if(terminated)
         {
@@ -140,8 +134,9 @@ TRACE_FUNC
             // Setup traversal.
 
             leafAddr = 0;   // No postponed leaf.
-            nodeAddr = 0;   // Start from the root.
+            leafAddr2= 0;   // No postponed leaf.
             lastNodeAddr = EntrypointSentinel;
+            nodeAddr = 0;   // Start from the root.
             hitIndex = -1;  // No triangle intersected so far.
         }
 
@@ -149,31 +144,20 @@ TRACE_FUNC
 
         while(nodeAddr != EntrypointSentinel)
         {
-            int current_child;
-            #ifdef DEBUG1
-                printf("Entered Main loop iteration: %i\n", nodeAddr);
-            #endif
             // Traverse internal nodes until all SIMD lanes have found a leaf.
-
+            int current_child;
 //          while (nodeAddr >= 0 && nodeAddr != EntrypointSentinel)
             while (unsigned int(nodeAddr) < unsigned int(EntrypointSentinel))   // functionally equivalent, but faster
             {
-                // Fetch AABBs of the two child nodes.
+                float4* ptr = (float4*)((char*)nodesA + nodeAddr);
+            float4 cnodes = tex1Dfetch(t_nodesA, nodeAddr + 3); // (c0, c1, p, dim)
+            int nearChild = __float_as_int(cnodes.x);
+            int farChild = __float_as_int(cnodes.y);
+            int parent = __float_as_int(cnodes.z);
+            int nch_idx = 0;
+            int fch_idx = 1;
 
-                #ifdef DEBUG1
-                    if(nodeAddr != 0){
-                        printf("Entered Main loop iteration (not root): %i\n", nodeAddr);
-                    }
-                    
-                #endif
-
-                float4 cnodes=FETCH_TEXTURE(nodesA, nodeAddr+3, float4); // (c0, c1, p, dim)
-                int nearChild = __float_as_int(cnodes.x);
-                int farChild = __float_as_int(cnodes.y);
-                int parent = __float_as_int(cnodes.z);
-                int nch_idx = 0;
-                int fch_idx = 1;
-
+                
                 // get near and far child
                 int dim = __float_as_int(cnodes.w);
 
@@ -194,6 +178,7 @@ TRACE_FUNC
                     swap(nearChild, farChild);
                     swap(nch_idx, fch_idx);
                 }
+                
 
                 if(lastNodeAddr == farChild){
                     lastNodeAddr = nodeAddr;
@@ -208,8 +193,8 @@ TRACE_FUNC
                 const int current_child_idx = (lastNodeAddr == parent) ? nch_idx : fch_idx;
 
                 
-                const float4 nxy = FETCH_TEXTURE(nodesA, nodeAddr+current_child_idx, float4);  // (c0/1.lo.x, c0/1.hi.x, c0/1.lo.y, c0/1.hi.y)
-                const float4 nz   = FETCH_TEXTURE(nodesA, nodeAddr+2, float4);  // (c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)
+                const float4 nxy = tex1Dfetch(t_nodesA, nodeAddr + current_child_idx);  // (c0/1.lo.x, c0/1.hi.x, c0/1.lo.y, c0/1.hi.y)
+                const float4 nz = tex1Dfetch(t_nodesA, nodeAddr + 2);  // (c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)
 
                 const float c0lox = nxy.x * idirx - oodx;
                 const float c0hix = nxy.y * idirx - oodx;
@@ -245,7 +230,6 @@ TRACE_FUNC
                     #endif
                
                 }else{
-        
                     // otherwise:
                     // if we are nearChild  -> go to far child
                     // else                 -> go up a level
@@ -255,27 +239,26 @@ TRACE_FUNC
                         lastNodeAddr = nodeAddr;
                         nodeAddr = parent;
                     }
-                
-                    continue;
+                   // continue;
                 }
 
-                // c
-                /*
-                if (nodeAddr < 0 && leafAddr >= 0){
-                    #ifdef DEBUG1
-                        printf("Found leaf: %i\n", nodeAddr);
-                    #endif
+                // First leaf => postpone and continue traversal.
+
+                if (nodeAddr < 0 && leafAddr  >= 0)     // Postpone max 1
+//              if (nodeAddr < 0 && leafAddr2 >= 0)     // Postpone max 2
+                {
+                    //leafAddr2= leafAddr;          // postpone 2
                     leafAddr = nodeAddr;
                     nodeAddr = lastNodeAddr;
                     lastNodeAddr = current_child;
                 }
-                */
 
                 // All SIMD lanes have found a leaf? => process them.
 
+                // TODO: check and improve this check
                 // NOTE: inline PTX implementation of "if(!__any(leafAddr >= 0)) break;".
                 // tried everything with CUDA 4.2 but always got several redundant instructions.
-                /*
+
                 unsigned int mask;
                 asm("{\n"
                     "   .reg .pred p;               \n"
@@ -284,14 +267,8 @@ TRACE_FUNC
                     "}"
                     : "=r"(mask)
                     : "r"(leafAddr));
-                if(!mask){
-                    #ifdef DEBUG1
-                        printf("Warp got out: %i\n", nodeAddr);
-                    #endif
+                if(!mask)
                     break;
-                }
-                */
-                    
 
                 //if(!__any(leafAddr >= 0))
                 //    break;
@@ -301,8 +278,6 @@ TRACE_FUNC
 
             while (leafAddr < 0)
             {
-                nodeAddr = lastNodeAddr;
-                lastNodeAddr = current_child;
                 for (int triAddr = ~leafAddr;; triAddr += 3)
                 {
                     // Tris in TEX (good to fetch as a single batch)
@@ -350,24 +325,23 @@ TRACE_FUNC
                         }
                     }
                 } // triangle
-                // finished leaf
-                //leafAddr = 0;
 
                 // Another leaf was postponed => process it as well.
 
 //              if(leafAddr2<0) { leafAddr = leafAddr2; leafAddr2=0; } else     // postpone2
-                /*{
+                {
                     leafAddr = nodeAddr;
-                    if (nodeAddr < 0)
+                    if(nodeAddr<0)
                     {
-                        nodeAddr = *(int*)stackPtr;
-                        stackPtr -= 4;
+                        nodeAddr = lastNodeAddr;
+                        lastNodeAddr = current_child;
                     }
-                }*/
+                }
             } // leaf
 
             // DYNAMIC FETCH
 
+            //TODO: update
             if( __popc(__ballot(true)) < DYNAMIC_FETCH_THRESHOLD )
                 break;
 

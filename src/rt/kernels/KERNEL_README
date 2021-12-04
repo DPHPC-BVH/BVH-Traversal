@@ -21,4 +21,4 @@ pascal_speculative_stackless            | yes     | no                | stackles
 pascal_speculative_stackless_opt5       | yes     | no                | stackless    | BVHLayout_Compact_Stackless  | non-persistent | while-while, speculative traversal                             | ray-independent traversal order
 pascal_speculative_stackless_tex1d      | yes     | no                | stackless    | BVHLayout_Compact2_Stackless | non-persistent | while-while, speculative traversal                             | (tex1Dfetch)
 
-pascal_dynamic_fetch_stackless          | no      | no                | stackless    | BVHLayout_Compact2_Stackless | non-persistent | while-while, speculative traversal, dynamic ray-fetching       | (tex1Dfetch)
+pascal_dynamic_fetch_stackless          | yes     | no                | stackless    | BVHLayout_Compact2_Stackless | non-persistent | while-while, speculative traversal, dynamic ray-fetching       | (tex1Dfetch)
