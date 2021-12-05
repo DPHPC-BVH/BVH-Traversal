@@ -38,6 +38,8 @@
 
 //------------------------------------------------------------------------
 
+#define FULL_MASK 0xffffffff                // Mask if all threads participate in a warp level reduction
+
 //------------------------------------------------------------------------
 
 extern "C" __global__ void queryConfig(void)
@@ -231,7 +233,7 @@ TRACE_FUNC
 
             // All SIMD lanes have found a leaf => process them.
 
-            if (!__any(searchingLeaf))
+            if(!__any_sync(FULL_MASK, searchingLeaf))
                 break;
         }
 

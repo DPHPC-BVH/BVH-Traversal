@@ -156,10 +156,10 @@ TRACE_FUNC
                 int nearChild = __float_as_int(cnodes.x);
                 int farChild = __float_as_int(cnodes.y);
                 int parent = __float_as_int(cnodes.z);
-                int nch_idx = 0;
-                int fch_idx = 1;
+                const int nch_idx = 0;
+                const int fch_idx = 1;
 
-                
+                /*
                 // get near and far child
                 int dim = __float_as_int(cnodes.w);
 
@@ -180,6 +180,7 @@ TRACE_FUNC
                     swap(nearChild, farChild);
                     swap(nch_idx, fch_idx);
                 }
+                */
                 
                 
 

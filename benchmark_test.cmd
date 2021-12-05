@@ -10,7 +10,10 @@ Rem set KERNELS=--kernel=kepler_dynamic_fetch --kernel=fermi_speculative_while_w
 Rem set KERNELS=--kernel=pascal_speculative_stackless --kernel=pascal_speculative_stackless_opt5 --kernel=pascal_speculative_stackless_tex1d --kernel=pascal_stackless_opt3 --kernel=pascal_stackless_opt5
 Rem set KERNELS=--kernel=pascal_speculative_stackless_tex1d --kernel=pascal_speculative_stackless_tex1d_2 --kernel=pascal_stackless_opt3
 Rem set KERNELS=--kernel=pascal_speculative_stackless_tex1d --kernel=fermi_speculative_while_while
-set KERNELS=--kernel=pascal_speculative_stackless_tex1d  --kernel=kepler_dynamic_fetch --kernel=pascal_stackless_opt3 --kernel=pascal_stackless_opt5
+Rem set KERNELS=--kernel=pascal_speculative_stackless_tex1d  --kernel=kepler_dynamic_fetch --kernel=pascal_stackless_opt3 --kernel=pascal_stackless_opt5
+Rem set KERNELS=--kernel=pascal_dynamic_fetch_stackless_opt5 --kernel=pascal_dynamic_fetch_stackless --kernel=pascal_speculative_stackless_tex1d
+Rem set KERNELS=--kernel=pascal_speculative_stackless_tex1d --kernel=pascal_speculative_stackless_tex1d_2
+set KERNELS=--kernel=pascal_speculative_stackless_tex1d_2 --kernel=pascal_speculative_stackless_tex1d_opt5
 
 Rem CAMERAS ================================================================================================
 

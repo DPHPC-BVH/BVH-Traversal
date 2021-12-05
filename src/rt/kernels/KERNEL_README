@@ -10,7 +10,7 @@ tesla_persistent_speculative_while_while| yes     | yes               | stack-ba
 
 
 pascal_persistent_stackless             | yes     | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          | 
-pascal_persistent_stackless_opt3        | yes     | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          | branch elemination
+pascal_persistent_stackless_opt3        | yes     | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          | branch elemination (no performance difference -> probably done by compiler)
 pascal_persistent_stackless_opt4        | yes     | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          | ray-independent traversal order
 pascal_persistent_stackless_opt5        | yes     | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          | ray-independent traversal order, removed register spilling
 
@@ -20,5 +20,8 @@ pascal_stackless_opt5                   | yes     | no                | stackles
 pascal_speculative_stackless            | yes     | no                | stackless    | BVHLayout_Compact_Stackless  | non-persistent | while-while, speculative traversal                             |
 pascal_speculative_stackless_opt5       | yes     | no                | stackless    | BVHLayout_Compact_Stackless  | non-persistent | while-while, speculative traversal                             | ray-independent traversal order
 pascal_speculative_stackless_tex1d      | yes     | no                | stackless    | BVHLayout_Compact2_Stackless | non-persistent | while-while, speculative traversal                             | (tex1Dfetch)
+pascal_speculative_stackless_tex1d_2    | yes     | no                | stackless    | BVHLayout_Compact2_Stackless | non-persistent | while-while, speculative traversal                             | (tex1Dfetch), removed boolean indicator signaling that a SIMD lane has found a leaf (like in dynamic fetch)
+pascal_speculative_stackless_tex1d_opt5 | yes     | no                | stackless    | BVHLayout_Compact2_Stackless | non-persistent | while-while, speculative traversal                             | (tex1Dfetch), rm bool, ray-independent traversal order
 
-pascal_dynamic_fetch_stackless          | yes     | no                | stackless    | BVHLayout_Compact2_Stackless | non-persistent | while-while, speculative traversal, dynamic ray-fetching       | (tex1Dfetch)
+pascal_dynamic_fetch_stackless          | yes     | no                | stackless    | BVHLayout_Compact2_Stackless | persistent | while-while, speculative traversal, dynamic ray-fetching           | (tex1Dfetch)
+pascal_dynamic_fetch_stackless_opt5     | yes     | no                | stackless    | BVHLayout_Compact2_Stackless | persistent | while-while, speculative traversal, dynamic ray-fetching           | (tex1Dfetch), ray-independent traversal order

@@ -44,7 +44,7 @@
 
 extern "C" __global__ void queryConfig(void)
 {
-    g_config.bvhLayout = BVHLayout_Compact_Stackless;
+    g_config.bvhLayout = BVHLayout_Compact2_Stackless;
     g_config.blockWidth = 32; // One warp per row.
     g_config.blockHeight = 4; // 4*32 = 128 threads
 }
@@ -123,11 +123,11 @@ TRACE_FUNC
     {
         // Traverse internal nodes until all SIMD lanes have found a leaf.
         int current_child;
-        bool searchingLeaf = true;
+        //bool searchingLeaf = true;
         while (nodeAddr >= 0 && nodeAddr != EntrypointSentinel)
         {
             float4* ptr = (float4*)((char*)nodesA + nodeAddr);
-            float4 cnodes = ptr[3]; // (c0, c1, p, dim)
+            float4 cnodes = tex1Dfetch(t_nodesA, nodeAddr + 3); // (c0, c1, p, dim)
             int nearChild = __float_as_int(cnodes.x);
             int farChild = __float_as_int(cnodes.y);
             int parent = __float_as_int(cnodes.z);
@@ -146,7 +146,7 @@ TRACE_FUNC
                     case 1:
                         ray_dim = idiry;
                         break;
-                case 2:
+                    case 2:
                         ray_dim = idirz;
                         break;
                 }
@@ -155,6 +155,7 @@ TRACE_FUNC
                     swap(nearChild, farChild);
                     swap(nch_idx, fch_idx);
                 }
+                
 
                 if(lastNodeAddr == farChild){
                     lastNodeAddr = nodeAddr;
@@ -169,8 +170,8 @@ TRACE_FUNC
                 const int current_child_idx = (lastNodeAddr == parent) ? nch_idx : fch_idx;
 
                 
-                const float4 nxy = ptr[current_child_idx];  // (c0/1.lo.x, c0/1.hi.x, c0/1.lo.y, c0/1.hi.y)
-                const float4 nz = ptr[2];  // (c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)
+                const float4 nxy = tex1Dfetch(t_nodesA, nodeAddr + current_child_idx);  // (c0/1.lo.x, c0/1.hi.x, c0/1.lo.y, c0/1.hi.y)
+                const float4 nz = tex1Dfetch(t_nodesA, nodeAddr + 2);  // (c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)
 
                 const float c0lox = nxy.x * idirx - oodx;
                 const float c0hix = nxy.y * idirx - oodx;
@@ -224,7 +225,7 @@ TRACE_FUNC
 
             if (nodeAddr < 0 && leafAddr >= 0)
             {
-                searchingLeaf = false;
+                //searchingLeaf = false;
                 leafAddr = nodeAddr;
                 nodeAddr = lastNodeAddr;
                 lastNodeAddr = current_child;
@@ -232,7 +233,8 @@ TRACE_FUNC
 
             // All SIMD lanes have found a leaf => process them.
 
-            if(!__any_sync(FULL_MASK, searchingLeaf))
+            // TODO __any_sync
+            if(!__any_sync(FULL_MASK, leafAddr >= 0))
                 break;
         }
 
