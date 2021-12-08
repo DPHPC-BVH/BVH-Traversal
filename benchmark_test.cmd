@@ -13,7 +13,8 @@ Rem set KERNELS=--kernel=pascal_speculative_stackless_tex1d --kernel=fermi_specu
 Rem set KERNELS=--kernel=pascal_speculative_stackless_tex1d  --kernel=kepler_dynamic_fetch --kernel=pascal_stackless_opt3 --kernel=pascal_stackless_opt5
 Rem set KERNELS=--kernel=pascal_dynamic_fetch_stackless_opt5 --kernel=pascal_dynamic_fetch_stackless --kernel=pascal_speculative_stackless_tex1d
 Rem set KERNELS=--kernel=pascal_speculative_stackless_tex1d --kernel=pascal_speculative_stackless_tex1d_2
-set KERNELS=--kernel=pascal_speculative_stackless_tex1d_2 --kernel=pascal_speculative_stackless_tex1d_opt5
+Rem set KERNELS=--kernel=pascal_speculative_stackless_tex1d_2 --kernel=fermi_speculative_while_while --kernel=kepler_dynamic_fetch
+set KERNELS=--kernel=pascal_speculative_stackless_tex1d_2 --kernel=kepler_dynamic_fetch
 
 Rem CAMERAS ================================================================================================
 
@@ -37,8 +38,13 @@ Rem echo %CAMERAS%
 
 Rem set EXTRA=--ao-radius=0.3
 
+Rem set EXTRA=--measure-repeats=3 --mode=2
+set EXTRA=--mode=0
+
 rmdir /s /q %~dp0\cudacache
 
-%EXE% benchmark --log=%LOG% --mesh=%MESH% %EXTRA% %CAMERAS% %KERNELS% %KERNELS%
+Rem %EXE% benchmark --log=%LOG% --mode=0 --mesh=%MESH% %EXTRA% %CAMERAS% %KERNELS%
+Rem %EXE% benchmark --log=%LOG% --mode=1 --mesh=%MESH% %EXTRA% %CAMERAS% %KERNELS%
+%EXE% benchmark --log=%LOG% --mesh=%MESH% %EXTRA% %CAMERAS% %KERNELS%
 
 echo Done.

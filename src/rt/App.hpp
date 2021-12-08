@@ -113,7 +113,37 @@ void runBenchmark(
     int                     numSamples,
     bool                    sortSecondary,
     int                     warmupRepeats,
-    int                     measureRepeats);
+    int                     measureRepeats,
+    bool                    preprocess);
+
+void runBenchmarkMultipleRuns(
+    const Vec2i& frameSize,
+    const String& meshFile,
+    const Array<String>& cameras,
+    const Array<String>& kernels,
+    F32                     sbvhAlpha,
+    F32                     aoRadius,
+    int                     numSamples,
+    bool                    sortSecondary,
+    int                     warmupRepeats,
+    int                     measureRepeats,
+    bool                    preprocess);
+
+void runBenchmarkFrame(
+    const Vec2i& frameSize,
+    const String& meshFile,
+    const Array<String>& cameras,
+    const Array<String>& kernels,
+    F32                     sbvhAlpha,
+    F32                     aoRadius,
+    int                     numSamples,
+    bool                    sortSecondary,
+    int                     warmupRepeats,
+    int                     measureRepeats,
+    bool                    preprocess);
+
+
+void logBenchmark(const String& output_file, const String& mesh_file, Array<F32>& kernels, Array<F32>& cameras, Array<F32>& rayTypes, Array<F32>& results);
 
 //------------------------------------------------------------------------
 }

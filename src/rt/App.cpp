@@ -98,6 +98,8 @@ static const char* const s_commandHelpText =
     "\n"
     "Options for \"rt benchmark\":\n"
     "\n"
+    "   --mode=<0/1>            Benchmarking mode: Measuring kernels only or entire frame times. Default is kernels only (0).\n"
+    "   --preprocess=<0/1>      Precompile all needed kernels and construct all BVH Trees before starting the Benchmarks. Default is (1).\n"
     "   --mesh=<file.obj>       Mesh to benchmark.\n"
     "   --camera=\"<sig>\"        Camera signature. Can specify multiple times.\n"
     "   --kernel=<name>         CUDA kernel. Can specify multiple. Default = all.\n"
@@ -606,7 +608,8 @@ void FW::runBenchmark(
     int                     numSamples,
     bool                    sortSecondary,
     int                     warmupRepeats,
-    int                     measureRepeats)
+    int                     measureRepeats,
+    bool                    preprocess)
 {
     int numRayTypes = Renderer::RayType_Max;
 
@@ -643,15 +646,42 @@ void FW::runBenchmark(
     if (hasError())
         return;
 
+    // Preprocess => makes sure that all kernals have been compiled and all BVHs have been constructed
+    if(preprocess){
+        CameraControls camera;
+        camera.decodeSignature(cameras[0]);
+        int diffuse_ray_type = numRayTypes - 1;
+        for (int kernelIdx = 0; kernelIdx < kernels.getSize(); kernelIdx++) {
+            String title = sprintf("Preprocessing %s", kernels[kernelIdx].getPtr());
+            printf("%s...\n", title.getPtr());
+            window.setTitle(title);
+
+            // run kernels
+            params.kernelName = kernels[kernelIdx];
+            params.rayType = (Renderer::RayType)diffuse_ray_type;
+            renderer.setParams(params);
+            renderer.renderFrame(gl, camera);
+
+        }
+        
+    }
+    
+
     // Benchmark each combination.
 
+    // kernels, RayTypes, cameras, measurements
+
+    Array<F32> time_results;
+    Array<F32> rays_results;
     Array<F32> results;
     for (int kernelIdx = 0; kernelIdx < kernels.getSize(); kernelIdx++)
     {
         for (int rayType = 0; rayType < numRayTypes; rayType++)
         {
             S64 totalRays = 0;
+            S64 rays = 0;
             F32 totalLaunchTime = 0.0f;
+            F32 launchTime = 0.0f;
 
             for (int cameraIdx = 0; cameraIdx < cameras.getSize(); cameraIdx++)
             {
@@ -670,7 +700,9 @@ void FW::runBenchmark(
                 CameraControls camera;
                 camera.decodeSignature(cameras[cameraIdx]);
                 renderer.beginFrame(gl, camera);
-                totalRays += (S64)renderer.getTotalNumRays() * measureRepeats;
+                
+                rays = (S64)renderer.getTotalNumRays();
+                totalRays += rays * measureRepeats;
 
                 // Process each batch.
 
@@ -692,9 +724,16 @@ void FW::runBenchmark(
 
                     for (int i = 0; i < warmupRepeats; i++)
                         renderer.traceBatch();
-                    for (int i = 0; i < measureRepeats; i++)
-                        totalLaunchTime += renderer.traceBatch();
+                    for (int i = 0; i < measureRepeats; i++){
+                        launchTime = renderer.traceBatch();
+                        totalLaunchTime += launchTime;
+                        time_results.add(launchTime);
+                        rays_results.add(rays);
+                    }
+                        
                 }
+
+        
 
                 // Error => skip.
 
@@ -727,6 +766,9 @@ void FW::runBenchmark(
         printf("%-10s", "---");
     printf("\n");
 
+
+
+
     for (int i = 0; i < kernels.getSize(); i++)
     {
         printf("%-42s", kernels[i].getPtr());
@@ -734,6 +776,31 @@ void FW::runBenchmark(
             printf("%-10.2f", results[i * numRayTypes + j]);
         printf("\n");
     }
+    /*
+    // test
+    S32 num_kernels = kernels.getSize();
+    S32 num_cameras = cameras.getSize();
+    for (int i = 0; i < num_kernels; i++)
+    {
+        printf("(test)%-42s", kernels[i].getPtr());
+        for (int j = 0; j < numRayTypes; j++) {
+            S64 totalRays = 0;
+            F32 totalTime = 0;
+            for (int k = 0; k < num_cameras; k++) {
+                
+                for (int q = 0; q < measureRepeats; q++) {
+                    totalRays += rays_results[i * numRayTypes + j * num_cameras + k * measureRepeats + q];
+                    totalTime += time_results[i * numRayTypes + j * num_cameras + k * measureRepeats + q];
+                }
+            }
+            F32 total_Mrayss = (F32)totalRays / totalTime * 1.0e-6f;
+            printf("%-10.2f", total_Mrayss);
+        }
+            
+        printf("\n");
+    }
+    */
+
 
     printf("%-42s", "---");
     for (int i = 0; i < numRayTypes; i++)
@@ -741,6 +808,403 @@ void FW::runBenchmark(
     printf("\n");
     printf("\n");
 }
+
+void FW::runBenchmarkMultipleRuns(
+    const Vec2i& frameSize,
+    const String& meshFile,
+    const Array<String>& cameras,
+    const Array<String>& kernels,
+    F32                     sbvhAlpha,
+    F32                     aoRadius,
+    int                     numSamples,
+    bool                    sortSecondary,
+    int                     warmupRepeats,
+    int                     measureRepeats,
+    bool                    preprocess)
+{
+    int numRayTypes = Renderer::RayType_Max;
+
+    // Print header.
+
+    CudaModule::staticInit();
+    printf("Running benchmark for \"%s\".\n", meshFile.getPtr());
+    printf("\n");
+
+    // Setup renderer.
+
+    Renderer::Params params;
+    params.aoRadius = aoRadius;
+    params.numSamples = numSamples;
+    params.sortSecondary = sortSecondary;
+
+    BVH::BuildParams buildParams;
+    buildParams.splitAlpha = sbvhAlpha;
+
+    Renderer renderer;
+    renderer.setBuildParams(buildParams);
+    renderer.setMesh(importMesh(meshFile));
+
+    // Create window.
+
+    Window window;
+    window.setSize(frameSize);
+    window.setVisible(false);
+    window.realize();
+    GLContext* gl = window.getGL();
+
+    // Error => skip.
+
+    if (hasError())
+        return;
+
+    // Preprocess => makes sure that all kernals have been compiled and all BVHs have been constructed
+    if (preprocess) {
+        CameraControls camera;
+        camera.decodeSignature(cameras[0]);
+        int diffuse_ray_type = numRayTypes - 1;
+        for (int kernelIdx = 0; kernelIdx < kernels.getSize(); kernelIdx++) {
+            String title = sprintf("Preprocessing %s", kernels[kernelIdx].getPtr());
+            printf("%s...\n", title.getPtr());
+            window.setTitle(title);
+
+            // run kernels
+            params.kernelName = kernels[kernelIdx];
+            params.rayType = (Renderer::RayType)diffuse_ray_type;
+            renderer.setParams(params);
+            renderer.renderFrame(gl, camera);
+
+        }
+
+    }
+
+
+    // Benchmark each combination.
+
+    // kernels, RayTypes, cameras, measurements
+
+    Array<F32> time_results;
+    Array<F32> rays_results;
+    Array<F32> results;
+    for (int kernelIdx = 0; kernelIdx < kernels.getSize(); kernelIdx++)
+    {
+        for (int measurmentIdx = 0; measurmentIdx < warmupRepeats + measureRepeats; measurmentIdx++)
+        {
+            for (int rayType = 0; rayType < numRayTypes; rayType++)
+            {
+                S64 totalRays = 0;
+                S64 rays = 0;
+                F32 totalLaunchTime = 0.0f;
+                F32 launchTime = 0.0f;
+
+                for (int cameraIdx = 0; cameraIdx < cameras.getSize(); cameraIdx++)
+                {
+                    // Print status.
+
+                    String title = sprintf("%s (measurement: %d), %s, camera %d", kernels[kernelIdx].getPtr(), measurmentIdx, s_rayTypeNames[rayType], cameraIdx);
+                    printf("%s...\n", title.getPtr());
+                    window.setTitle(title);
+
+                    // Setup rendering.
+
+                    params.kernelName = kernels[kernelIdx];
+                    params.rayType = (Renderer::RayType)rayType;
+                    renderer.setParams(params);
+
+                    CameraControls camera;
+                    camera.decodeSignature(cameras[cameraIdx]);
+                    renderer.beginFrame(gl, camera);
+
+                    rays = (S64)renderer.getTotalNumRays();
+                    totalRays += rays;
+
+                    // Process each batch.
+
+                    while (renderer.nextBatch())
+                    {
+                        // Render and display result.
+
+                        renderer.traceBatch();
+                        renderer.updateResult();
+                        window.setVisible(true);
+                        Window::pollMessages();
+                        for (int i = 0; i < 3; i++)
+                        {
+                            renderer.displayResult(gl);
+                            gl->swapBuffers();
+                        }
+
+                        //  measure.
+
+                        launchTime = renderer.traceBatch();
+                        totalLaunchTime += launchTime;
+                        time_results.add(launchTime);
+                        rays_results.add(rays);
+
+                    }
+
+                    if (hasError())
+                        return;
+                }
+
+                // Calculate Mrays/s.
+
+                F32 mraysPerSec = (F32)totalRays / totalLaunchTime * 1.0e-6f;
+                results.add(mraysPerSec);
+                //printf("ms/frame = %.2f\n", totalLaunchTime / ((F32)measureRepeats));
+                printf("Mrays/s = %.2f\n", mraysPerSec);
+                printf("\n");
+            }
+        }
+    }
+
+    // Print summary table.
+
+    printf("Done.\n");
+    printf("\n");
+
+    printf("%-42s", "Kernel");
+    for (int i = 0; i < numRayTypes; i++)
+        printf("%-10s", s_rayTypeNames[i]);
+    printf("\n");
+
+    printf("%-42s", "---");
+    for (int i = 0; i < numRayTypes; i++)
+        printf("%-10s", "---");
+    printf("\n");
+
+
+
+    S32 mesurements = warmupRepeats + measureRepeats;
+    for (int i = 0; i < kernels.getSize(); i++)
+    {
+        for (int mes=0; mes < mesurements; mes++) {
+            printf("%-42s(%d)", kernels[i].getPtr(), mes);
+            for (int j = 0; j < numRayTypes; j++)
+                printf("%-10.2f", results[i * mesurements * numRayTypes + mes*numRayTypes + j]);
+            printf("\n");
+        }
+    }
+
+    // test
+    /*
+    S32 num_kernels = kernels.getSize();
+    S32 num_cameras = cameras.getSize();
+    for (int i = 0; i < num_kernels; i++)
+    {
+        printf("(test)%-42s", kernels[i].getPtr());
+        for (int j = 0; j < numRayTypes; j++) {
+            S64 totalRays = 0;
+            F32 totalTime = 0;
+            for (int k = 0; k < num_cameras; k++) {
+
+                for (int q = 0; q < measureRepeats; q++) {
+                    totalRays += rays_results[i * numRayTypes + j * num_cameras + k * measureRepeats + q];
+                    totalTime += time_results[i * numRayTypes + j * num_cameras + k * measureRepeats + q];
+                }
+            }
+            F32 total_Mrayss = (F32)totalRays / totalTime * 1.0e-6f;
+            printf("%-10.2f", total_Mrayss);
+        }
+
+        printf("\n");
+    }
+    */
+
+
+    printf("%-42s", "---");
+    for (int i = 0; i < numRayTypes; i++)
+        printf("%-10s", "---");
+    printf("\n");
+    printf("\n");
+}
+
+void FW::runBenchmarkFrame(
+    const Vec2i& frameSize,
+    const String& meshFile,
+    const Array<String>& cameras,
+    const Array<String>& kernels,
+    F32                     sbvhAlpha,
+    F32                     aoRadius,
+    int                     numSamples,
+    bool                    sortSecondary,
+    int                     warmupRepeats,
+    int                     measureRepeats,
+    bool                    preprocess)
+{
+    int numRayTypes = Renderer::RayType_Max;
+
+    // Print header.
+
+    CudaModule::staticInit();
+    printf("Running benchmark for \"%s\".\n", meshFile.getPtr());
+    printf("\n");
+
+    // Setup renderer.
+
+    Renderer::Params params;
+    params.aoRadius = aoRadius;
+    params.numSamples = numSamples;
+    params.sortSecondary = sortSecondary;
+
+    BVH::BuildParams buildParams;
+    buildParams.splitAlpha = sbvhAlpha;
+
+    Renderer renderer;
+    renderer.setBuildParams(buildParams);
+    renderer.setMesh(importMesh(meshFile));
+
+    // Create window.
+
+    Window window;
+    window.setSize(frameSize);
+    window.setVisible(false);
+    window.realize();
+    GLContext* gl = window.getGL();
+
+    // Error => skip.
+
+    if (hasError())
+        return;
+
+    // Preprocess => makes sure that all kernels have been compiled and all BVH have been constructed
+    if (preprocess) {
+        int diffuse_ray_type = numRayTypes - 1;
+        for (int kernelIdx = 0; kernelIdx < kernels.getSize(); kernelIdx++) {
+            String title = sprintf("Preprocessing %s", kernels[kernelIdx].getPtr());
+            printf("%s...\n", title.getPtr());
+            window.setTitle(title);
+
+            // Setup rendering.
+
+            params.kernelName = kernels[kernelIdx];
+            params.rayType = (Renderer::RayType)diffuse_ray_type;
+            renderer.setParams(params);
+
+            CameraControls camera;
+            camera.decodeSignature(cameras[0]);
+            renderer.beginFrame(gl, camera);
+            renderer.traceBatch();
+            renderer.updateResult();
+        }
+    }
+
+
+    // Benchmark each combination.
+
+    // kernels, RayTypes, cameras, measurements
+
+    Array<F32> time_results;
+    Array<F32> rays_results;
+    for (int kernelIdx = 0; kernelIdx < kernels.getSize(); kernelIdx++)
+    {
+        for (int rayType = 0; rayType < numRayTypes; rayType++)
+        {
+            S64 totalRays = 0;
+            S64 rays = 0;
+            F32 totalLaunchTime = 0.0f;
+            F32 launchTime = 0.0f;
+
+            for (int cameraIdx = 0; cameraIdx < cameras.getSize(); cameraIdx++)
+            {
+                // Print status.
+
+                String title = sprintf("%s, %s, camera %d", kernels[kernelIdx].getPtr(), s_rayTypeNames[rayType], cameraIdx);
+                printf("%s...\n", title.getPtr());
+                window.setTitle(title);
+
+                // Setup rendering.
+
+                params.kernelName = kernels[kernelIdx];
+                params.rayType = (Renderer::RayType)rayType;
+                renderer.setParams(params);
+
+                CameraControls camera;
+                camera.decodeSignature(cameras[cameraIdx]);
+                //renderer.beginFrame(gl, camera);
+
+                rays = (S64)renderer.getTotalNumRays();
+                totalRays += rays * measureRepeats;
+
+                // Warmup and render frames
+
+                // warmup
+                for (int i = 0; i < warmupRepeats; i++){
+                    renderer.renderFrame(gl, camera);
+                }
+
+                // measurement
+                for (int i = 0; i < measureRepeats; i++) {
+                    launchTime = renderer.renderFrame(gl, camera);
+                    totalLaunchTime += launchTime;
+                    time_results.add(launchTime);
+                    rays_results.add(rays);
+                }
+                        
+
+
+                // Error => skip.
+
+                if (hasError())
+                    return;
+            }
+
+            // Calculate Mrays/s.
+
+            F32 mraysPerSec = (F32)totalRays / totalLaunchTime * 1.0e-6f;
+            //results.add(mraysPerSec);
+            //printf("ms/frame = %.2f\n", totalLaunchTime / ((F32)measureRepeats));
+            printf("Mrays/s = %.2f\n", mraysPerSec);
+            printf("\n");
+        }
+    }
+
+    // Print summary table.
+
+    printf("Done.\n");
+    printf("\n");
+
+    printf("%-42s", "Kernel");
+    for (int i = 0; i < numRayTypes; i++)
+        printf("%-10s", s_rayTypeNames[i]);
+    printf("\n");
+
+    printf("%-42s", "---");
+    for (int i = 0; i < numRayTypes; i++)
+        printf("%-10s", "---");
+    printf("\n");
+
+
+    // test
+    S32 num_kernels = kernels.getSize();
+    S32 num_cameras = cameras.getSize();
+    for (int i = 0; i < num_kernels; i++)
+    {
+        printf("(test)%-42s", kernels[i].getPtr());
+        for (int j = 0; j < numRayTypes; j++) {
+            S64 totalRays = 0;
+            F32 totalTime = 0;
+            for (int k = 0; k < num_cameras; k++) {
+
+                for (int q = 0; q < measureRepeats; q++) {
+                    totalRays += rays_results[i * numRayTypes + j * num_cameras + k * measureRepeats + q];
+                    totalTime += time_results[i * numRayTypes + j * num_cameras + k * measureRepeats + q];
+                }
+            }
+            F32 total_Mrayss = (F32)totalRays / totalTime * 1.0e-6f;
+            printf("%-10.2f", total_Mrayss);
+        }
+
+        printf("\n");
+    }
+
+
+    printf("%-42s", "---");
+    for (int i = 0; i < numRayTypes; i++)
+        printf("%-10s", "---");
+    printf("\n");
+    printf("\n");
+}
+
 
 //------------------------------------------------------------------------
 
@@ -779,6 +1243,8 @@ void FW::init(void)
     bool            sortRays        = true;
     int             warmupRepeats   = 2;
     int             measureRepeats  = 10;
+    int             benchmarkMode   = 0;      // 0 => kernels, 1 => frames 
+    bool            preprocess      = true;
 
     for (int i = 2; i < argc; i++)
     {
@@ -855,6 +1321,20 @@ void FW::init(void)
             if (!parseInt(ptr, measureRepeats) || *ptr || measureRepeats < 1)
                 setError("Invalid number of measurement repeats '%s'!", argv[i]);
         }
+        else if (modeBenchmark && parseLiteral(ptr, "--mode="))
+        {
+            int value = 0;
+            if (!parseInt(ptr, value) || *ptr || value < 0 || value > 2)
+                setError("Invalid benchmarking mode kernel/frame '%s'!", argv[i]);
+            benchmarkMode = value;
+        }
+        else if (modeBenchmark && parseLiteral(ptr, "--preprocess="))
+        {
+            int value = 0;
+            if (!parseInt(ptr, value) || *ptr || value < 0 || value > 1)
+                setError("Invalid preprocessing enable/disable '%s'!", argv[i]);
+            preprocess = (value != 0);
+        }
         else
         {
             setError("Invalid option '%s'!", argv[i]);
@@ -894,7 +1374,16 @@ void FW::init(void)
         runInteractive(frameSize, stateFile);
 
     if (modeBenchmark)
-        runBenchmark(frameSize, meshFile, cameras, kernels, sbvhAlpha, aoRadius, numSamples, sortRays, warmupRepeats, measureRepeats);
+        if (benchmarkMode == 0) {
+            runBenchmark(frameSize, meshFile, cameras, kernels, sbvhAlpha, aoRadius, numSamples, sortRays, warmupRepeats, measureRepeats, preprocess);
+        }
+        else if(benchmarkMode == 1) {
+            runBenchmarkFrame(frameSize, meshFile, cameras, kernels, sbvhAlpha, aoRadius, numSamples, sortRays, warmupRepeats, measureRepeats, preprocess);
+        }
+        else {
+            runBenchmarkMultipleRuns(frameSize, meshFile, cameras, kernels, sbvhAlpha, aoRadius, numSamples, sortRays, warmupRepeats, measureRepeats, preprocess);
+        }
+        
 
     // Handle errors.
 
