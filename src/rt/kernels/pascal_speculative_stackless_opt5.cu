@@ -209,7 +209,7 @@ TRACE_FUNC
 
             // All SIMD lanes have found a leaf => process them.
 
-            if (!__any(searchingLeaf))
+            if (!__any_sync(0xffffffff, (int)searchingLeaf)))
                 break;
         }
 

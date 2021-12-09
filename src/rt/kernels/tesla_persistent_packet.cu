@@ -36,7 +36,7 @@
 
     "Realtime ray tracing on GPU with BVH-based packet",
     Johannes Guenther, Stefan Popov, Hans-Peter Seidel and Philipp Slusallek,
-    Proc. IEEE/Eurographics Symposium on Interactive Ray Tracing 2007, 113–118.
+    Proc. IEEE/Eurographics Symposium on Interactive Ray Tracing 2007, 113ï¿½118.
 */
 
 #include "CudaTracerKernels.hpp"
@@ -215,8 +215,8 @@ TRACE_FUNC
 
                 bool traverseChild0 = (c0max >= c0min);
                 bool traverseChild1 = (c1max >= c1min);
-                bool anyc0 = __any(traverseChild0);
-                bool anyc1 = __any(traverseChild1);
+                bool anyc0 = __any_sync(0xffffffff, (int)traverseChild0);
+                bool anyc1 = __any_sync(0xffffffff, (int)traverseChild1);
                 int nodeAddrChild0 = __float_as_int(cnodes.x); // Stored as int.
                 int nodeAddrChild1 = __float_as_int(cnodes.y); // Stored as int.
 
