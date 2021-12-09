@@ -155,7 +155,11 @@ F32 CudaTracer::traceBatch(RayBuffer& rays)
     if (m_kernelConfig.usePersistentThreads != 0)
     {
         *(S32*)module->getGlobal("g_warpCounter").getMutablePtr() = 0;
-        desiredWarps = 720; // Tesla: 30 SMs * 24 warps, Fermi: 15 SMs * 48 warps
+        // desiredWarps = 720; // Tesla: 30 SMs * 24 warps, Fermi: 15 SMs * 48 warps
+        // Query the required info
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, 0);
+        desiredWarps = prop.multiProcessorCount * (prop.maxThreadsPerMultiProcessor / prop.warpSize);  // numSMs * numWarpsPerSM
     }
 
     Vec2i blockSize(m_kernelConfig.blockWidth, m_kernelConfig.blockHeight);
