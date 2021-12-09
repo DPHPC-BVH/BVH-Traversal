@@ -30,6 +30,8 @@
 #include "gui/CommonControls.hpp"
 #include "3d/CameraControls.hpp"
 #include "cuda/Renderer.hpp"
+#include "io/File.hpp"
+#include <direct.h>
 
 namespace FW
 {
@@ -143,7 +145,7 @@ void runBenchmarkFrame(
     bool                    preprocess);
 
 
-void logBenchmark(const String& output_file, const String& mesh_file, Array<F32>& kernels, Array<F32>& cameras, Array<F32>& rayTypes, Array<F32>& results);
+void logBenchmarkMultipleRuns(const String& output_file, const String& mesh_file, const Array<String>& kernels, const Array<String>& cameras, Array<F32>& time_results, Array<S64>& ray_results, S32 num_warmup, S32 num_measurments);
 
 //------------------------------------------------------------------------
 }
