@@ -1049,7 +1049,7 @@ void FW::runBenchmarkMultipleRuns(
         printf("%-10s", "---");
     printf("\n");
     printf("\n");
-    logBenchmarkMultipleRuns(String("output.txt"), meshFile, kernels, cameras, time_results, rays_results, warmupRepeats, measureRepeats);
+    logBenchmarkMultipleRuns(meshFile, kernels, cameras, time_results, rays_results, warmupRepeats, measureRepeats);
 }
 
 void FW::runBenchmarkFrame(
@@ -1432,10 +1432,13 @@ void FW::init(void)
 }
 
 
-void FW::logBenchmarkMultipleRuns(const String& output_file, const String& mesh_file, const Array<String>& kernels, const Array<String>& cameras, Array<F32>& time_results, Array<S64>& ray_results, S32 num_warmup, S32 num_measurments) {
+void FW::logBenchmarkMultipleRuns(const String& mesh_file, const Array<String>& kernels, const Array<String>& cameras, Array<F32>& time_results, Array<S64>& ray_results, S32 num_warmup, S32 num_measurments) {
     char* cwd = _getcwd(NULL, 0);
 
-    String output_path = String(cwd) + "\\benchmarks\\out\\" + output_file;
+    Array<String> p;
+    mesh_file.split('.', p);
+
+    String output_path = String(cwd) + "\\benchmarks\\out\\" + p[0];
     FW::printf("%s\n", output_path.getPtr());
     
     

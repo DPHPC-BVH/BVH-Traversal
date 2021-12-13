@@ -134,13 +134,17 @@ print_raw_data(benchmark_info, data, kernels, rays)
 mray_data = get_mrays_per_measurement(benchmark_info, data, kernels, rays, True)
 print_mrays_per_measurement(benchmark_info, mray_data, kernels, rays)
 
-np.random.seed(10)
+#np.random.seed(10)
+# returns a list containing a np.array for each kernel with all Mray/s measurements as float
+# the second parameter decides which ray type should be extracted: 0=>Primary, 1=>AO, 2=>diffuse
 data = get_box_plot_data(mray_data, 0)
+
+
  
 fig = plt.figure(figsize =(10, 7))
  
 # Creating plot
-plt.boxplot(data)
+plt.boxplot(data, notch=True)
 plt.xticks([1, 2], kernels)
  
 # show plot

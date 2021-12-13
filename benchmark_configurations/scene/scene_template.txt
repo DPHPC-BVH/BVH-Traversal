@@ -1,0 +1,6 @@
+scene: scenes/rt/conference/conference.obj
+camera: 6omr/04j3200bR6Z/0/3ZEAz/x4smy19///c/05frY109Qx7w////m100
+camera: Lpmr/07k3200CS6Z/0/QqOIz1qfnsx19///c/05frY109Qx7w////m100
+camera: Y1BR00IkZd/0aA9X/0/Gy8Px1ca7Tw19///c/05frY109Qx7w////m100
+camera: XYDl00Gqv600byxY/00IQE4x/jN1jx/9///c/05frY109Qx7w////m100
+camera: w:ie00yxXX00ND1b/03TZ6qy1egt3x/9///c/05frY109Qx7w////m100
