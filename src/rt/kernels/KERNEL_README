@@ -1,13 +1,19 @@
 Description of all the kernels
-Kernel name                             | works ? | reference kernel? | algorithm    | data structure               | cuda threads   | implementation techniques                                      | additional optimizations (Stackless)
+Kernel name                             | works ? | reference kernel? | algorithm    | data structure               | cuda threads   | implementation techniques                                      | additional optimizations
 ----------------------------------------+---------+-------------------+--------------+------------------------------+----------------+----------------------------------------------------------------+--------------------------------------------------------------------
 kepler_dynamic_fetch                    | yes     | yes               | stack-based  | BVHLayout_Compact2           | persistent     | while-while, speculative traversal, dynamic ray-fetching       |                          
 fermi_speculative_while                 | yes     | yes               | stack-based  | BVHLayout_Compact            | non-persistent | while-while, speculative traversal                             |   
 tesla_persistent_package                | yes     | yes               | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | package                                                        |   
 tesla_persistent_while_while            | yes     | yes               | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    |   
-tesla_persistent_speculative_while_while| yes     | yes               | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    |   
+tesla_persistent_speculative_while_while|renderbug| yes               | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    |   
 
+tesla_persistent_while_while            | yes     | yes               | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    |   
+tesla_persistent_if_while               | yes     | yes               | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | if-while                                                       |   
+tesla_persistent_while_if               | yes     | yes               | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-if                                                       |   
 
+tesla_persistent_while_while_early_break|renderbug| no                | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    | break traversal loop if more than 16 threads in a warp found triangles (negative optimization)
+tesla_persistent_speculative_while_while_early_break
+                                        |renderbug| no                | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    | break traversal loop if more than 16 threads in a warp found triangles
 
 pascal_persistent_stackless             | yes     | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          | 
 pascal_persistent_stackless_opt3        | yes     | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          | branch elemination (no performance difference -> probably done by compiler)

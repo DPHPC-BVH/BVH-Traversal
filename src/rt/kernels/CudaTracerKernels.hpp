@@ -216,6 +216,17 @@ __device__ __inline__ float spanEndKepler(float a0, float a1, float b0, float b1
 __device__ __inline__ float spanBeginFermi(float a0, float a1, float b0, float b1, float c0, float c1, float d) {	return magic_max7(a0, a1, b0, b1, c0, c1, d); }
 __device__ __inline__ float spanEndFermi(float a0, float a1, float b0, float b1, float c0, float c1, float d)	{	return magic_min7(a0, a1, b0, b1, c0, c1, d); }
 
+// Count number of bits set 1
+__device__ __inline__ int countSetBits(unsigned int n)
+{
+    int count = 0;
+    while (n) 
+    {
+        n &= (n-1);
+        ++count;
+    }
+    return count;
+}
 #endif
 
 //------------------------------------------------------------------------
