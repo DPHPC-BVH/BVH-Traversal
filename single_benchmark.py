@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+import shutil
 
 if len(sys.argv) < 2:
     print("Need at least one configuration files")
@@ -111,7 +112,17 @@ for kernel in kernels:
 
 exe_string = exe + " " + "benchmark" + " " + exe_args
 
-# clean cudacache
-os.system("rmdir /s /q cudacache")
 
-os.system(exe_string)
+
+# clean cudacache
+#os.system("rmdir /s /q cudacache")
+#os.system("rmdir /s /q benchmarks/out")
+
+#os.system(exe_string)
+src_folder = Path("benchmarks/out")
+dst_folder = Path("benchmarks/data")
+for file_name in os.listdir(src_folder):
+    src = os.path.join(src_folder, file_name)
+    dst = os.path.join(dst_folder, file_name)
+    if os.path.isfile(src):
+        shutil.copy(src, dst)

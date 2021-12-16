@@ -1,0 +1,6 @@
+pascal_speculative_stackless_tex1d_2 Primary 	 p=0.6992
+kepler_dynamic_fetch Primary 	 p=0.1192
+pascal_speculative_stackless_tex1d_2 AO 	 p=0.0000
+kepler_dynamic_fetch AO 	 p=0.2035
+pascal_speculative_stackless_tex1d_2 Diffuse 	 p=0.0000
+kepler_dynamic_fetch Diffuse 	 p=0.0767
