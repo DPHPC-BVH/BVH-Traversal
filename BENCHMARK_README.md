@@ -46,6 +46,11 @@ boxplots are placed into benchmarks/img \
 QQ plots are placed into benchmarks/img/QQ \
 normality test results are placed into benchmarks/norm_tests 
 
+for more information execute
+```
+python benchmarks/process_benchmarks.py -h
+```
+
 ---
 **IMPORTATNT NOTE**
 

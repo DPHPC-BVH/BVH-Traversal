@@ -129,7 +129,8 @@ void runBenchmarkMultipleRuns(
     bool                    sortSecondary,
     int                     warmupRepeats,
     int                     measureRepeats,
-    bool                    preprocess);
+    bool                    preprocess,
+    bool                    onlyPrimary);
 
 void runBenchmarkFrame(
     const Vec2i& frameSize,
@@ -145,7 +146,7 @@ void runBenchmarkFrame(
     bool                    preprocess);
 
 
-void logBenchmarkMultipleRuns(const String& mesh_file, const Array<String>& kernels, const Array<String>& cameras, Array<F32>& time_results, Array<S64>& ray_results, S32 num_warmup, S32 num_measurments);
+void logBenchmarkMultipleRuns(const String& mesh_file, const Array<String>& kernels, const Array<String>& cameras, Array<F32>& time_results, Array<S64>& ray_results, S32 num_warmup, S32 num_measurments, S32 num_rays);
 
 //------------------------------------------------------------------------
 }

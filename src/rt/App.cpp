@@ -98,7 +98,7 @@ static const char* const s_commandHelpText =
     "\n"
     "Options for \"rt benchmark\":\n"
     "\n"
-    "   --mode=<0/1>            Benchmarking mode: Measuring kernels only or entire frame times. Default is kernels only (0).\n"
+    "   --mode=<0/1/2/3>         Benchmarking mode: Measuring kernels only batch mode (0) entire frame times (1) kernels only in frame mode (2). Default is kernels only (0). (3) is (2) but only for primary rays\n"
     "   --preprocess=<0/1>      Precompile all needed kernels and construct all BVH Trees before starting the Benchmarks. Default is (1).\n"
     "   --mesh=<file.obj>       Mesh to benchmark.\n"
     "   --camera=\"<sig>\"        Camera signature. Can specify multiple times.\n"
@@ -820,9 +820,15 @@ void FW::runBenchmarkMultipleRuns(
     bool                    sortSecondary,
     int                     warmupRepeats,
     int                     measureRepeats,
-    bool                    preprocess)
+    bool                    preprocess,
+    bool                    onlyPrimary)
 {
     int numRayTypes = Renderer::RayType_Max;
+
+    if (onlyPrimary) {
+        numRayTypes = 1;
+    }
+
 
     // Print header.
 
@@ -997,12 +1003,12 @@ void FW::runBenchmarkMultipleRuns(
     printf("\n\n");
 
     S32 ray_block_size = cameras.getSize();
-    S32 mesure_block_size = Renderer::RayType_Max * ray_block_size;
+    S32 mesure_block_size = numRayTypes * ray_block_size;
     S32 kernel_block_size = mesurements * mesure_block_size;
     for (int kernelIdx = 0; kernelIdx < kernels.getSize(); kernelIdx++) {
         for (int measureIdx = 0; measureIdx < mesurements; measureIdx++) {
             printf("(test)%-42s(%d)", kernels[kernelIdx].getPtr(), measureIdx);
-            for (int rayTypeIdx = 0; rayTypeIdx < Renderer::RayType_Max; rayTypeIdx++) {
+            for (int rayTypeIdx = 0; rayTypeIdx < numRayTypes; rayTypeIdx++) {
                 S64 rays = 0;
                 F32 time = 0.0f;
                 for (int cameraIdx = 0; cameraIdx < cameras.getSize(); cameraIdx++) {
@@ -1049,7 +1055,7 @@ void FW::runBenchmarkMultipleRuns(
         printf("%-10s", "---");
     printf("\n");
     printf("\n");
-    logBenchmarkMultipleRuns(meshFile, kernels, cameras, time_results, rays_results, warmupRepeats, measureRepeats);
+    logBenchmarkMultipleRuns(meshFile, kernels, cameras, time_results, rays_results, warmupRepeats, measureRepeats, numRayTypes);
 }
 
 void FW::runBenchmarkFrame(
@@ -1358,7 +1364,7 @@ void FW::init(void)
         else if (modeBenchmark && parseLiteral(ptr, "--mode="))
         {
             int value = 0;
-            if (!parseInt(ptr, value) || *ptr || value < 0 || value > 2)
+            if (!parseInt(ptr, value) || *ptr || value < 0 || value > 3)
                 setError("Invalid benchmarking mode kernel/frame '%s'!", argv[i]);
             benchmarkMode = value;
         }
@@ -1414,9 +1420,11 @@ void FW::init(void)
         else if(benchmarkMode == 1) {
             runBenchmarkFrame(frameSize, meshFile, cameras, kernels, sbvhAlpha, aoRadius, numSamples, sortRays, warmupRepeats, measureRepeats, preprocess);
         }
-        else {
-            runBenchmarkMultipleRuns(frameSize, meshFile, cameras, kernels, sbvhAlpha, aoRadius, numSamples, sortRays, warmupRepeats, measureRepeats, preprocess);
+        else if (benchmarkMode == 2) {
+            runBenchmarkMultipleRuns(frameSize, meshFile, cameras, kernels, sbvhAlpha, aoRadius, numSamples, sortRays, warmupRepeats, measureRepeats, preprocess, false);
             //logBenchmarkMultipleRuns(String("output.txt"), nullptr, Array<String>(), Array<String>(), Array<F32>(), Array<S64>(), 0);
+        } else {
+            runBenchmarkMultipleRuns(frameSize, meshFile, cameras, kernels, sbvhAlpha, aoRadius, numSamples, sortRays, warmupRepeats, measureRepeats, preprocess, true);
         }
         
 
@@ -1432,34 +1440,34 @@ void FW::init(void)
 }
 
 
-void FW::logBenchmarkMultipleRuns(const String& mesh_file, const Array<String>& kernels, const Array<String>& cameras, Array<F32>& time_results, Array<S64>& ray_results, S32 num_warmup, S32 num_measurments) {
+void FW::logBenchmarkMultipleRuns(const String& mesh_file, const Array<String>& kernels, const Array<String>& cameras, Array<F32>& time_results, Array<S64>& ray_results, S32 num_warmup, S32 num_measurments, S32 num_rays) {
     char* cwd = _getcwd(NULL, 0);
 
-    Array<String> p;
+    Array<String> p, q;
     mesh_file.split('.', p);
+    p[0].split('/', q);
 
-    String output_path = String(cwd) + "\\benchmarks\\out\\" + p[0];
+    String output_path = String(cwd) + "\\benchmarks\\out\\" + q[q.getSize()-1] + ".txt";
     FW::printf("%s\n", output_path.getPtr());
     
     
     File file(output_path, File::Modify);
     BufferedOutputStream out(file);
-    //out.writef("hello3lo!\n");
 
     S32 measurements = num_measurments + num_warmup;
 
     S32 ray_block_size = cameras.getSize();
-    S32 mesure_block_size = Renderer::RayType_Max * ray_block_size;
+    S32 mesure_block_size = num_rays * ray_block_size;
     S32 kernel_block_size = measurements * mesure_block_size;
 
     // header
-    out.writef("#header, %s, %d, %d, %d, %d, %d\n", mesh_file.getPtr(), kernels.getSize(), cameras.getSize(), Renderer::RayType_Max, num_warmup, num_measurments);
+    out.writef("#header, %s, %d, %d, %d, %d, %d\n", mesh_file.getPtr(), kernels.getSize(), cameras.getSize(), num_rays, num_warmup, num_measurments);
 
 
     // construct csv
     for (int kernelIdx = 0; kernelIdx < kernels.getSize(); kernelIdx++) {
         for (int measureIdx = 0; measureIdx < measurements; measureIdx++) {
-            for (int rayTypeIdx = 0; rayTypeIdx < Renderer::RayType_Max; rayTypeIdx++) {
+            for (int rayTypeIdx = 0; rayTypeIdx < num_rays; rayTypeIdx++) {
                 for (int cameraIdx = 0; cameraIdx < cameras.getSize(); cameraIdx++) {
                     S32 index = kernelIdx*kernel_block_size + measureIdx*mesure_block_size + rayTypeIdx* ray_block_size + cameraIdx;
                     S64 rays = ray_results[index];

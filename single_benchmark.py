@@ -115,10 +115,11 @@ exe_string = exe + " " + "benchmark" + " " + exe_args
 
 
 # clean cudacache
-#os.system("rmdir /s /q cudacache")
-#os.system("rmdir /s /q benchmarks/out")
+os.system("rmdir /s /q cudacache")
+os.system("rmdir /s /q benchmarks\out")
+os.system("mkdir benchmarks\out")
 
-#os.system(exe_string)
+os.system(exe_string)
 src_folder = Path("benchmarks/out")
 dst_folder = Path("benchmarks/data")
 for file_name in os.listdir(src_folder):
