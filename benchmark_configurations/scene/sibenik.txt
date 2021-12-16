@@ -1,0 +1,8 @@
+scene: scenes/rt/sibenik/sibenik.obj
+camera: ytIa02G35kz1i:ZZ/0//iSay/5W6Ex19///c/05frY109Qx7w////m100
+camera: :Wp802ACAD/2x9OQ/0/waE8z/IOKbx/9///c/05frY109Qx7w////m100
+camera: CFtpy/s6ea/28btX/0172CFy/K5g1z/9///c/05frY109Qx7w////m100
+camera: steO/0TlN1z1tsDg/03InaMz/bqZxx/9///c/05frY109Qx7w////m100
+camera: HJv//034:Rx1S4Xh/03dpXux1BVmGw/9///c/05frY109Qx7w////m100
+ao-radius: 5
+sbvh-alpha: 1.0e-5

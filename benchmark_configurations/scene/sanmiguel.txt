@@ -1,0 +1,6 @@
+scene: scenes/rt/sanmiguel/sanmiguel.obj
+camera: Yciwz1oRQmz/Xvsm005CwjHx/b70nx18tVI7005frY108Y/:x/v3/z100
+camera: NhL2/2tO1w/0OIZh005DPZMz/xC9Cz18tVI7005frY108Y/:x/v3/z100
+camera: AbE3/0LWiZz/4Ccj005X5X1z1qJ13x/8BfRky/5frY108Y/:x/v3/z100
+ao-radius: 1.5
+sbvh-alpha: 1.0e-6

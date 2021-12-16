@@ -126,7 +126,6 @@ TRACE_FUNC
         //bool searchingLeaf = true;
         while (nodeAddr >= 0 && nodeAddr != EntrypointSentinel)
         {
-            float4* ptr = (float4*)((char*)nodesA + nodeAddr);
             float4 cnodes = tex1Dfetch(t_nodesA, nodeAddr + 3); // (c0, c1, p, dim)
             int nearChild = __float_as_int(cnodes.x);
             int farChild = __float_as_int(cnodes.y);
@@ -233,8 +232,6 @@ TRACE_FUNC
             }
 
             // All SIMD lanes have found a leaf => process them.
-
-            
             if(!__any_sync(FULL_MASK, leafAddr >= 0))
                 break;
         }

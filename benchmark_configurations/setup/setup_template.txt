@@ -2,6 +2,3 @@ exe: rt_x64_Release.exe
 warmups: 1
 measurements: 2
 mode: 2
-kernel: pascal_speculative_stackless_tex1d_2
-kernel: kepler_dynamic_fetch
-ao-radius: 0.3

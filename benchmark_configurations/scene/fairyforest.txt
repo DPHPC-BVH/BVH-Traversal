@@ -1,0 +1,8 @@
+scene: scenes/rt/fairyforest/fairyforest.obj
+camera: cIxMx/sK/Ty/EFu3z/5m9mWx/YPA5z/8///m007toC10AnAHx///Uy200
+camera: KI/Qz/zlsUy/TTy6z13BdCZy/LRxzy/8///m007toC10AnAHx///Uy200
+camera: mF5Gz1SuO1z/ZMooz11Q0bGz/CCNxx18///m007toC10AnAHx///Uy200
+camera: vH7Jy19GSHx/YN45x//P2Wpx1MkhWy18///m007toC10AnAHx///Uy200
+camera: ViGsx/KxTFz/Ypn8/05TJTmx1ljevx18///m007toC10AnAHx///Uy200
+ao-radius: 0.3
+sbvh-alpha: 1.0e-5

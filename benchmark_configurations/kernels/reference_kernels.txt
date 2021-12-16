@@ -1,0 +1,5 @@
+kernel: kepler_dynamic_fetch
+kernel: fermi_speculative_while_while
+kernel: tesla_persistent_while_while
+kernel: tesla_persistent_speculative_while_while
+kernel: tesla_persistent_packet

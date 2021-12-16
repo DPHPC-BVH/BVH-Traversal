@@ -3,12 +3,12 @@
 To run a single benchmark from a given configuration execute:
 
 ```
-python single_benchmark.py <config_1> <config_2> ...
+python single_benchmark.py <config_1>  <config_2> ...
 ```
 
 Example:
 ```
-python single_benchmark.py ./benchmark_configurations/scene/scene_template.txt ./benchmark_configurations/setup/setup_template.txt
+python single_benchmark.py ./benchmark_configurations/scene/scene_template.txt ./benchmark_configurations/setup/setup_template.txt ./benchmark_configurations/kernels/test_kernels.txt
 ```
 
 ### Note: it does not matter where the arguments are specified. To run a successfull benchmark however, the following parameters have to be specified in at least on of the configuration files:
@@ -46,7 +46,7 @@ boxplots are placed into benchmarks/img \
 QQ plots are placed into benchmarks/img/QQ \
 normality test results are placed into benchmarks/norm_tests 
 
-for more information execute
+for more information and options execute
 ```
 python benchmarks/process_benchmarks.py -h
 ```

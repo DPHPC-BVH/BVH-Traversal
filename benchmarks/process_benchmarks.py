@@ -5,6 +5,7 @@ from statsmodels.graphics.gofplots import qqplot
 from scipy.stats import shapiro
 import numpy as np
 import argparse
+import statistics
 
 def process_header(header_row):
     metadata = {}
@@ -109,6 +110,8 @@ parser.add_argument('src', help='Path to the raw benchmark data')
 parser.add_argument('--normal_test', action="store_true", help='perform a normality test on all the sample sets and raises an alert if one ore multiple are not normally distributed')
 parser.add_argument('--box_plot', action="store_true", help='make boxplots for all the data sets')
 parser.add_argument('--QQ_plot', action="store_true", help='make QQ plots for all the data sets')
+parser.add_argument('--dump_table', action="store_true", help='dump a table with the summarized measurements for each kernel and ray type')
+parser.add_argument('--time', action="store_true", help='do calculations using time measurements only')
 
 args = parser.parse_args()
 
@@ -168,9 +171,12 @@ if args.normal_test:
         data = get_box_plot_data(mray_data, i)
         for idx, kernel in enumerate(kernels):
             stat, p = shapiro(data[idx])
-            norm_test_log += ("%s %s \t p=%.4f" %(kernel, ray_types[i], p)) + "\n"
+            norm_test_log += ("%s %s \t p=%.4f" %(kernel, ray_types[i], p))
+            if p < 0.05:
+                norm_test_log += "\t ***THRESHOLD NOT REACHED***"
+            norm_test_log += "\n"
             #print('%s %s Statistics=%.3f, p=%.3f' % (kernel, ray_types[i], stat, p))
-    file_name = scene_name + "_" + str(benchmark_info["num_measure"]) + ".txt"
+    file_name = scene_name + "_" + str(benchmark_info["num_measure"]) + "_normtest" + ".txt"
     file_path = test_out_path + "/" + file_name
     with open(file_path, "w") as o_file:
         o_file.write("%s" % norm_test_log)
@@ -201,4 +207,32 @@ if args.box_plot:
         
         plt.savefig(out_path + scene_name + "_" + ray_types[i] + "_" + str(benchmark_info["num_measure"]) + ".png")
         #plt.show()
+
+if args.dump_table:
+    data = []
+    for i in range(len(rays)):
+        data.append(get_box_plot_data(mray_data, i))
+
+    measurement_dump = ""
+
+    for idx, kernel in enumerate(kernels):
+        for i in range(len(rays)):
+            d = data[i][idx]
+            var = statistics.variance(d)
+            mean = statistics.mean(d)
+            std_dev = statistics.stdev(d)
+            measurement_dump += ("%s %s [Mrays/s] \t mean: %f var: %f std_deviation: %f\n" % (kernel, ray_types[i], mean, var, std_dev))
+            #print("%s %s [Mrays/s]:" % (kernel, ray_types[i]))
+            
+            for j, mes in enumerate(d):
+                #print("\t %.2f" % (mes))
+                measurement_dump += ("  (%d)\t %.2f\n" % (j+1, mes))
+
+    file_name = scene_name + "_" + str(benchmark_info["num_measure"]) + "_dump" + ".txt"
+    file_path = 'benchmarks/dump/' + file_name
+    with open(file_path, "w") as o_file:
+        o_file.write("%s" % measurement_dump)
+    
+            
+
 
