@@ -1447,7 +1447,7 @@ void FW::logBenchmarkMultipleRuns(const String& mesh_file, const Array<String>& 
     mesh_file.split('.', p);
     p[0].split('/', q);
 
-    String output_path = String(cwd) + "\\benchmarks\\out\\" + q[q.getSize()-1] + ".txt";
+    String output_path = String(cwd) + "\\benchmarks\\out\\" + q[q.getSize()-1] + "_" + String(num_measurments) + ".txt";
     FW::printf("%s\n", output_path.getPtr());
     
     
