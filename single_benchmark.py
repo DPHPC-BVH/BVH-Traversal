@@ -14,6 +14,7 @@ scene = None
 exe = None
 mode = None
 ao_radius = None
+sbvh_alpha = None
 
 # parse files
 for idx, arg in enumerate(sys.argv):
@@ -46,6 +47,8 @@ for idx, arg in enumerate(sys.argv):
                 mode = value
             elif(key == "ao-radius"):
                 ao_radius = value
+            elif(key == "sbvh-alpha"):
+                sbvh_alpha = value
 
 # check if we have all data needed
 if len(cameras) == 0:
@@ -83,6 +86,7 @@ warmup_prefix = "--warmup-repeats="
 measure_prefix = "--measure-repeats="
 scene_prefix = "--mesh="
 ao_radius_prefix = "--ao-radius="
+sbvh_alpha_prefix = "--sbvh-alpha="
 
 
 exe_args = scene_prefix + scene
@@ -101,6 +105,10 @@ if ao_radius is not None:
     exe_args += ao_radius_prefix + ao_radius
     exe_args += " "
 
+if sbvh_alpha is not None:
+    exe_args += sbvh_alpha_prefix + sbvh_alpha
+    exe_args += " "
+
 for camera in cameras:
     exe_args += camera_prefix + camera
     exe_args += " "
@@ -114,12 +122,15 @@ exe_string = exe + " " + "benchmark" + " " + exe_args
 
 
 
-# clean cudacache
+# clear cudacache & output directory
 os.system("rmdir /s /q cudacache")
 os.system("rmdir /s /q benchmarks\out")
 os.system("mkdir benchmarks\out")
 
+# benchmark
 os.system(exe_string)
+
+# save benchmarked data
 src_folder = Path("benchmarks/out")
 dst_folder = Path("benchmarks/data")
 for file_name in os.listdir(src_folder):

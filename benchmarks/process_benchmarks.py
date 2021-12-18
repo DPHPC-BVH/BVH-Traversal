@@ -1,6 +1,7 @@
 import csv
 import sys
 import matplotlib.pyplot as plt
+from scipy.stats.stats import _equal_var_ttest_denom
 from statsmodels.graphics.gofplots import qqplot
 from scipy.stats import shapiro
 import numpy as np
@@ -76,6 +77,28 @@ def get_mrays_per_measurement(info, data, kernels, rays, drop_warmup):
                 
     return mray_data
 
+def get_time_per_measurement_ms(info, data, drop_warmup):
+    time_data = []
+    measurements = info["num_warmup"] + info["num_measure"]
+    for kernel_id in range(info["num_kernels"]):
+        time_data.append([])
+        mid = 0
+        for measure_id in range(measurements):
+            if drop_warmup and (measure_id < info["num_warmup"]):
+                continue
+            time_data[kernel_id].append([])
+            #print("\n%s %d " % (kernels[kernel_id], measure_id),end='')
+            for ray_id in range(info["num_rays"]):
+                time_data[kernel_id][mid].append([])
+                total_time = 0.0
+                for camera_id in range(info["num_cameras"]):
+                    total_time += data[kernel_id][measure_id][ray_id][camera_id]["time"]  
+                time_data[kernel_id][mid][ray_id] = total_time*1000
+                #print("\t%f" % mrays, end='')
+            mid += 1
+                
+    return time_data
+
 def print_mrays_per_measurement(info, mray_data, kernels, rays):
     for kernel_id in range(len(mray_data)):
         for measure_id in range(len(mray_data[kernel_id])):
@@ -93,6 +116,57 @@ def get_box_plot_data(mray_data, ray_type):
             d.append(mrays)
         data.append(np.array(d))
     return data
+
+# output kernels: list of kernels for which data should e returned
+# data is returned in the same order as defined by output_kernels
+def get_plot_data(data, ray_type, all_kernels, output_kernels):
+    data = []
+    for kernel in output_kernels:
+        d = []
+        kernel_id = all_kernels.index(kernel)
+        for measure_id in range(len(mray_data[kernel_id])):
+            mrays = mray_data[kernel_id][measure_id][ray_type]
+            d.append(mrays)
+        data.append(np.array(d))
+    return data
+
+def get_plot_cnf(path):
+    k = {}
+    with open(path, newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='|')
+        for row in reader:
+            if row[0][0] == '#':
+                pass
+            else:
+                kernel = row[0].strip()
+                label = row[1].strip()
+                ref = row[2].strip()
+                k[kernel] = {}
+                k[kernel]["label"] = label
+                k[kernel]["is_reference"] = ref == "reference"
+
+    return k
+
+# returns a list of labels for kernels
+def get_kernel_label_list(kernel_metadata, kernels):
+    labels = []
+    for kernel in kernels:    
+        if kernel in kernel_metadata:
+            labels.append(kernel_metadata[kernel]["label"])
+        else:
+            labels.append(kernel)
+    return labels
+
+def is_reference_kernel(kernel_metadata, kernel):
+    if kernel in kernel_metadata:
+        return kernel_metadata[kernel]["is_reference"]
+    else:
+        return False
+    
+
+
+
+
 
 
 
@@ -112,6 +186,8 @@ parser.add_argument('--box_plot', action="store_true", help='make boxplots for a
 parser.add_argument('--QQ_plot', action="store_true", help='make QQ plots for all the data sets')
 parser.add_argument('--dump_table', action="store_true", help='dump a table with the summarized measurements for each kernel and ray type')
 parser.add_argument('--time', action="store_true", help='do calculations using time measurements only')
+parser.add_argument('--no_title', action="store_true", help='Remove Titels from the plots')
+parser.add_argument('--xfmt', action="store_true", help='Automatically rotate labels on the x-axis to prevent overlaps')
 
 args = parser.parse_args()
 
@@ -119,8 +195,10 @@ args = parser.parse_args()
 benchmark_info = None
 data = []
 kernels = []
+output_kernels = ["kepler_dynamic_fetch", "pascal_speculative_stackless_tex1d_2"]
 rays = []
 ray_types = ["Primary", "AO", "Diffuse"]
+kernel_plot_metadata = get_plot_cnf("benchmarks/plot.cnf")
 
 with open(args.src, newline='') as csvfile:
     spamreader = csv.reader(csvfile, delimiter=',', quotechar='|')
@@ -154,7 +232,11 @@ with open(args.src, newline='') as csvfile:
 
 print("\n\n")
 #print_raw_data(benchmark_info, data, kernels, rays)
-mray_data = get_mrays_per_measurement(benchmark_info, data, kernels, rays, True)
+if args.time:
+    mray_data = get_time_per_measurement_ms(benchmark_info, data, True)
+else:
+    mray_data = get_mrays_per_measurement(benchmark_info, data, kernels, rays, True)
+
 print_mrays_per_measurement(benchmark_info, mray_data, kernels, rays)
 print("\n")
 #np.random.seed(10)
@@ -192,18 +274,57 @@ if args.QQ_plot:
 
 
 if args.box_plot:
+    label_list = get_kernel_label_list(kernel_plot_metadata, output_kernels)
     for i in range(len(rays)):
-        data = get_box_plot_data(mray_data, i)
-        fig = plt.figure(figsize =(10, 7))
+        data = get_plot_data(data, i, kernels, output_kernels)
+        #data = get_box_plot_data(mray_data, i)
+        plt.figure(figsize =(10, 7))
+        fig, ax = plt.subplots(figsize = (10, 7))
  
         # Creating plot
-        plt.boxplot(data, notch=True)
+        
+        boxprops = dict(linestyle='--', linewidth=1.5)
+        medianprops = dict(linewidth=1.5)
+        bplot = plt.boxplot(data, notch=True, labels=label_list, patch_artist=True, boxprops=boxprops, medianprops=medianprops)
 
-        plt.xticks(list(range(1, len(kernels)+1)), kernels)
- 
-        # show plot
+        if args.time:
+            y_label = plt.ylabel('Runtime [ms]', fontsize=16, labelpad=10)
+        else:
+            y_label = plt.ylabel('Performance [Mrays / s]', fontsize=16, labelpad=10)
+
+        #y_label.set_rotation(0)
+
+        plt.yticks(fontsize=16)
+        plt.xticks(fontsize=16)
+
+
+        # set title plot
         title = "Benchmark " + ray_types[i] + " Rays for " + scene_name + " with " + str(benchmark_info["num_cameras"]) + " cameras" 
-        plt.title(title)
+
+        if not args.no_title:
+            plt.title(title, fontsize=20, pad=15)
+
+        # set colors
+        for idx, box in enumerate(bplot['boxes']):
+            if is_reference_kernel(kernel_plot_metadata, output_kernels[idx]):
+                box.set_facecolor('lightblue')
+            else:
+                box.set_facecolor('lightgreen')
+
+        # set border
+        for axis in ['top','bottom','left','right']:
+            ax.spines[axis].set_linewidth(1.5)
+        ax.xaxis.set_tick_params(width=1.5)
+        ax.yaxis.set_tick_params(width=1.5)
+
+        # set grid
+        ax.yaxis.grid()
+
+        # format x-labels
+        if args.xfmt:
+            fig.autofmt_xdate()
+                
+
         
         plt.savefig(out_path + scene_name + "_" + ray_types[i] + "_" + str(benchmark_info["num_measure"]) + ".png")
         #plt.show()
