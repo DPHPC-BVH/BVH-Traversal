@@ -127,8 +127,14 @@ os.system("rmdir /s /q cudacache")
 os.system("rmdir /s /q benchmarks\out")
 os.system("mkdir benchmarks\out")
 
+
+
 # benchmark
 os.system(exe_string)
+
+# check if data folder exists
+if not os.path.exists("benchmarks/data"):
+    os.makedirs("benchmarks/data")
 
 # save benchmarked data
 src_folder = Path("benchmarks/out")
