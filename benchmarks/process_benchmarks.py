@@ -131,6 +131,7 @@ def get_plot_data(data, ray_type, all_kernels, output_kernels):
     return data
 
 def get_plot_cnf(path):
+    kernel_list = []
     k = {}
     with open(path, newline='') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='|')
@@ -141,11 +142,12 @@ def get_plot_cnf(path):
                 kernel = row[0].strip()
                 label = row[1].strip()
                 ref = row[2].strip()
+                kernel_list.append(kernel)
                 k[kernel] = {}
                 k[kernel]["label"] = label
                 k[kernel]["is_reference"] = ref == "reference"
 
-    return k
+    return kernel_list, k
 
 # returns a list of labels for kernels
 def get_kernel_label_list(kernel_metadata, kernels):
@@ -182,12 +184,14 @@ if len(sys.argv) < 2:
 parser = argparse.ArgumentParser(description='Process a raw benchmark_file')
 parser.add_argument('src', help='Path to the raw benchmark data')
 parser.add_argument('--normal_test', action="store_true", help='perform a normality test on all the sample sets and raises an alert if one ore multiple are not normally distributed')
+parser.add_argument('--median_ci_test', action="store_true", help='calculate nonparametric CIs for all sample sets and checks if they are within 5\% of the median')
 parser.add_argument('--box_plot', action="store_true", help='make boxplots for all the data sets')
 parser.add_argument('--QQ_plot', action="store_true", help='make QQ plots for all the data sets')
 parser.add_argument('--dump_table', action="store_true", help='dump a table with the summarized measurements for each kernel and ray type')
 parser.add_argument('--time', action="store_true", help='do calculations using time measurements only')
 parser.add_argument('--no_title', action="store_true", help='Remove Titels from the plots')
 parser.add_argument('--xfmt', action="store_true", help='Automatically rotate labels on the x-axis to prevent overlaps')
+parser.add_argument('--plot_cnf', action="store", help='path to the plot config file')
 
 args = parser.parse_args()
 
@@ -195,10 +199,11 @@ args = parser.parse_args()
 benchmark_info = None
 data = []
 kernels = []
-output_kernels = ["kepler_dynamic_fetch", "pascal_speculative_stackless_tex1d_2"]
+
 rays = []
 ray_types = ["Primary", "AO", "Diffuse"]
-kernel_plot_metadata = get_plot_cnf("benchmarks/plot.cnf")
+
+
 
 with open(args.src, newline='') as csvfile:
     spamreader = csv.reader(csvfile, delimiter=',', quotechar='|')
@@ -229,6 +234,14 @@ with open(args.src, newline='') as csvfile:
             data[kernel_index][measurment][ray_index][camera]["rays"] = rays_mes
 
             #print(' '.join(row))
+
+
+if args.plot_cnf is None:
+    kernel_plot_metadata = {}
+    output_kernels = kernels.copy()
+else:
+    k_list, kernel_plot_metadata = get_plot_cnf(args.plot_cnf)
+    output_kernels = [x for x in kernels if x in k_list]
 
 print("\n\n")
 #print_raw_data(benchmark_info, data, kernels, rays)
