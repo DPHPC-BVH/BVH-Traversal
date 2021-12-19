@@ -753,11 +753,18 @@ String CudaCompiler::fixOptions(String opts)
     if (!smArch && CudaModule::isAvailable())
         smArch = CudaModule::getComputeCapability();
 
+    // Force the -arch to be compute_62. Volta (compute_70 and above) introduced Independent Thread Scheduling, which makes speculative kernels work incorrectly.
+    S32 virtualArch = min(smArch, 62);
+
     if (smArch)
     {
         opts = removeOption(opts, "-arch", true);
         opts = removeOption(opts, "--gpu-architecture", true);
-        opts += sprintf("-arch sm_%d ", smArch);
+        opts = removeOption(opts, "-code", true);
+        opts = removeOption(opts, "--gpu-code", true);
+        // opts += sprintf("-arch sm_%d ", smArch);
+        opts += sprintf("-arch compute_%d ", virtualArch);
+        opts += sprintf("-code sm_%d ", smArch);
     }
 
     // Override pointer width.
