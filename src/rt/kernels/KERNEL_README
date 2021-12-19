@@ -10,11 +10,8 @@ tesla_persistent_speculative_while_while|renderbug| yes               | stack-ba
 tesla_persistent_while_while            | yes     | yes               | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    |   
 tesla_persistent_if_while               | yes     | yes               | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | if-while                                                       |   
 tesla_persistent_while_if               | yes     | yes               | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-if                                                       |   
-
-tesla_persistent_while_while_early_break|renderbug| no                | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    | break traversal loop if more than 16 threads in a warp found triangles (negative optimization)
 tesla_persistent_speculative_while_while_early_break
-                                        |renderbug| no                | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    | break traversal loop if more than 16 threads in a warp found triangles
-
+                                        | yes     | no                | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    | break traversal loop if more than 16 threads in a warp found triangles
 pascal_persistent_stackless             | yes     | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          | 
 pascal_persistent_stackless_opt3        | yes     | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          | branch elemination (no performance difference -> probably done by compiler)
 pascal_persistent_stackless_opt4        | yes     | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          | ray-independent traversal order
