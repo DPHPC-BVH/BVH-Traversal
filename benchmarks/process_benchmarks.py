@@ -120,13 +120,13 @@ def get_box_plot_data(mray_data, ray_type):
 
 # output kernels: list of kernels for which data should e returned
 # data is returned in the same order as defined by output_kernels
-def get_plot_data(data, ray_type, all_kernels, output_kernels):
+def get_plot_data(p_data, ray_type, all_kernels, output_kernels):
     data = []
     for kernel in output_kernels:
         d = []
         kernel_id = all_kernels.index(kernel)
-        for measure_id in range(len(mray_data[kernel_id])):
-            mrays = mray_data[kernel_id][measure_id][ray_type]
+        for measure_id in range(len(p_data[kernel_id])):
+            mrays = p_data[kernel_id][measure_id][ray_type]
             d.append(mrays)
         data.append(np.array(d))
     return data
@@ -196,6 +196,43 @@ def largest_stddev(data_array):
     for data in data_array:
         pass
 
+def get_optix_measurements(path, scene_id):
+    data = None
+    with open(path, newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',')
+        for row in reader:
+            if row[0].strip() == '#header' or not (row[0].strip()  == scene_id.strip()):
+                pass
+            else:
+                num_measurement = len(row) - 2
+                if data == None:
+                    data = [0.0] * num_measurement
+                for i in range(num_measurement):
+                    # assume measurements are in s
+                    data[i] += float(row[i+2].strip())*1000
+
+    print(data)
+    return np.array(data)
+
+
+def get_primary_plus_ao_time(data, kernels, output_kernels):
+    primary_data = get_plot_data(data, 0, kernels, output_kernels)
+    ao_data = get_plot_data(data, 1, kernels, output_kernels)
+
+    optix_data = []
+    for idx in range(len(primary_data)):
+        primary_mes = primary_data[idx]
+        ao_mes = ao_data[idx]
+        optix_mes = np.add(primary_mes, ao_mes)
+        optix_data.append(optix_mes)
+
+    return optix_data
+    
+
+
+#def get_optix_time_data(data):
+    #pass
+
 
 
 
@@ -222,6 +259,7 @@ parser.add_argument('--xfmt', action="store_true", help='Automatically rotate la
 parser.add_argument('--plot_cnf', action="store", help='path to the plot config file')
 parser.add_argument('--plot_stat_data', action="store_true", help='adds an aditional box with statistical information to the plot')
 parser.add_argument('--bar_plot', action="store_true", help='makes bar plots')
+parser.add_argument('--optix_src', action="store", help='Path to the optix benchmark dump which should be compared against')
 
 args = parser.parse_args()
 
@@ -315,11 +353,65 @@ if args.QQ_plot:
             qqplot(data[idx], line='s')
             plt.savefig(out_path + 'QQ/' + scene_name + "_" + kernel + "_" + ray_types[i] + "_" + str(benchmark_info["num_measure"]) + ".png")
 
+if args.optix_src is not None:
+    
+    optix_measurements = get_optix_measurements(args.optix_src, benchmark_info["obj_file"])
+    ao_p_data = get_primary_plus_ao_time(mray_data, kernels, output_kernels)
+    
+    ao_p_data.append(optix_measurements)
+    kernels.append("optix")
+    output_kernels.append("optix")
+    label_list = get_kernel_label_list(kernel_plot_metadata, output_kernels)
+
+    plt.figure(figsize =(10, 7))
+    fig, ax = plt.subplots(figsize = (10, 7))
+
+    boxprops = dict(linestyle='--', linewidth=1.5)
+    medianprops = dict(linewidth=1.5)
+    bplot = plt.boxplot(ao_p_data, notch=True, labels=label_list, patch_artist=True, boxprops=boxprops, medianprops=medianprops)
+
+        
+
+    if args.time:
+        y_label = plt.ylabel('Runtime [ms]', fontsize=16, labelpad=10)
+    else:
+        y_label = plt.ylabel('Performance [Mrays / s]', fontsize=16, labelpad=10)
+
+    #y_label.set_rotation(0)
+
+    plt.yticks(fontsize=16)
+    plt.xticks(fontsize=16)
+
+    for idx, box in enumerate(bplot['boxes']):
+            if is_reference_kernel(kernel_plot_metadata, output_kernels[idx]):
+                box.set_facecolor('lightblue')
+            else:
+                box.set_facecolor('lightgreen')
+
+    # set border
+    for axis in ['top','bottom','left','right']:
+        ax.spines[axis].set_linewidth(1.5)
+        ax.xaxis.set_tick_params(width=1.5)
+        ax.yaxis.set_tick_params(width=1.5)
+
+    # set grid
+    ax.yaxis.grid()
+
+    # format x-labels
+    if args.xfmt:
+        fig.autofmt_xdate()
+
+    fig.tight_layout()
+
+    plt.show()
+
+
+    exit()
 
 if args.box_plot or args.bar_plot:
     label_list = get_kernel_label_list(kernel_plot_metadata, output_kernels)
     for i in range(len(rays)):
-        data = get_plot_data(data, i, kernels, output_kernels)
+        plot_data = get_plot_data(mray_data, i, kernels, output_kernels)
         #data = get_box_plot_data(mray_data, i)
         plt.figure(figsize =(10, 7))
         fig, ax = plt.subplots(figsize = (10, 7))
@@ -333,7 +425,7 @@ if args.box_plot or args.bar_plot:
         
         boxprops = dict(linestyle='--', linewidth=1.5)
         medianprops = dict(linewidth=1.5)
-        bplot = plt.boxplot(data, notch=True, labels=label_list, patch_artist=True, boxprops=boxprops, medianprops=medianprops)
+        bplot = plt.boxplot(plot_data, notch=True, labels=label_list, patch_artist=True, boxprops=boxprops, medianprops=medianprops)
 
         
 
@@ -378,7 +470,7 @@ if args.box_plot or args.bar_plot:
         if args.plot_stat_data:
             text_props = dict(boxstyle='round', facecolor='wheat')
 
-            diff = largest_diff_95ci(data)
+            diff = largest_diff_95ci(plot_data)
             ci_diff = "%.2f" % (diff*100)
             stat_str = r'$95 \% \ CI: \pm$ ' + ci_diff + r'$\%$' 
 
