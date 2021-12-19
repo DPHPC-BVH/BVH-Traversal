@@ -164,7 +164,7 @@ TRACE_FUNC
             // Traverse internal nodes until all SIMD lanes have found a leaf.
 
             bool searchingLeaf = true;
-            unsigned int mask3 = mask2 & __ballot_sync(mask2, nodeAddr >= 0 && nodeAddr != EntrypointSentinel);  // Bit is 1 if that lane is still traversing.
+            unsigned int mask3 = mask2 & __ballot_sync(mask2, nodeAddr >= 0 && nodeAddr != EntrypointSentinel);
             while (nodeAddr >= 0 && nodeAddr != EntrypointSentinel)
             {
                 // Fetch AABBs of the two child nodes.
@@ -241,7 +241,6 @@ TRACE_FUNC
                 }
 
                 // All threads (that have not exited the loop) in the warp have found a leaf => process them.
-                //if(__all_sync(mask3, !searchingLeaf))
                 if(!__any_sync(mask3, searchingLeaf))
                    break;
 
