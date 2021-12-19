@@ -14,6 +14,9 @@
 |tesla_persistent_speculative_while_while|  yes               | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    ||
 |tesla_persistent_speculative_while_while_early_break | no                | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    |break traversal loop if more than 16 threads in a warp have found triangles or exited the loop|
 | |  |  |  |  |  ||
+|tesla_persistent_speculative_while_while_warp_sync | no | stack-based | BVHLayout_AOS/SOA_AOS/SOA | persistent | while-while, with new warp_sync intrinsics ||
+|tesla_persistent_speculative_while_while_warp_sync_early_break | no | stack-based | BVHLayout_AOS/SOA_AOS/SOA | persistent | while-while, with new warp_sync intrinsics |break traversal loop if more than 16 threads in a warp have found triangles or exited the loop|
+| |  |  |  |  |  ||
 |pascal_persistent_stackless            | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          ||
 |pascal_persistent_stackless_opt3          | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          |branch elemination (no performance difference -> probably done by compiler)|
 |pascal_persistent_stackless_opt4          | no                | stackless    | BVHLayout_Stackless          | persistent     | if-if                                                          |ray-independent traversal order|
@@ -30,5 +33,6 @@
 |pascal_dynamic_fetch_stackless           | no                | stackless    | BVHLayout_Compact2_Stackless | persistent | while-while, speculative traversal, dynamic ray-fetching           |(tex1Dfetch)|
 |pascal_dynamic_fetch_stackless_opt5        | no                | stackless    | BVHLayout_Compact2_Stackless | persistent | while-while, speculative traversal, dynamic ray-fetching           |(tex1Dfetch), ray-independent traversal order|
 | |  |  |  |  |  ||
-| |  |  |  |  |  ||
+|                                                              |                   |             |                              |                |                                                          |                                                              |
+|                                                              |                   |  |  |  |  ||
 

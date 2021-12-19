@@ -98,7 +98,7 @@ TRACE_FUNC
     rayCountArray[threadIdx.y] = 0;
 
     // Persistent threads: fetch and process rays in a loop.
-
+    unsigned int mask1 = __ballot_sync(0xffffffff, aux != 0);
     do
     {
         int tidx = traversalStack[STACK_SIZE + 0]; // threadIdx.x
@@ -118,6 +118,7 @@ TRACE_FUNC
         // Out of work => done.
         {
             int rayidx = localPoolNextRay + tidx;
+            mask1 &= __ballot_sync(mask1, rayidx < numRays);
             if (rayidx >= numRays)
                 break;
 
@@ -151,7 +152,7 @@ TRACE_FUNC
         }
 
         // Traversal loop.
-
+        unsigned mask2 = mask1 & __ballot_sync(mask1, nodeAddr != EntrypointSentinel);
         while (nodeAddr != EntrypointSentinel)
         {
             float oodx  = origx * aux->idirx;
@@ -161,6 +162,7 @@ TRACE_FUNC
             // Traverse internal nodes until all SIMD lanes have found a leaf.
 
             bool searchingLeaf = true;
+            unsigned int mask3 = mask2 & __ballot_sync(mask2, nodeAddr >= 0 && nodeAddr != EntrypointSentinel);
             while (nodeAddr >= 0 && nodeAddr != EntrypointSentinel)
             {
                 // Fetch AABBs of the two child nodes.
@@ -237,13 +239,18 @@ TRACE_FUNC
                 }
 
                 // Less than half of the SIMD lanes (16) are still traversing, then proceed to triangle intersection
-                if(__popc(__ballot(searchingLeaf)) < 4 )
+                int count = __popc(__ballot_sync(mask3, searchingLeaf));
+                // int count = __reduce_add_sync(mask3, searchingLeaf);  // Only supported on sm80 or higher
+                if(count < 16)
                     break;
+
+                // Before some threads may exit the loop, exclude them in the mask.
+                mask3 &= __ballot_sync(mask3, nodeAddr >= 0 && nodeAddr != EntrypointSentinel);    
             }
 
             // Process postponed leaf nodes.
 
-            while (leafAddr < 0)
+            while (!searchingLeaf && leafAddr < 0)
             {
                 // Fetch the start and end of the triangle list.
 
@@ -323,6 +330,9 @@ TRACE_FUNC
                     --stackPtr;
                 }
             } // leaf
+
+            // Before some threads may exit the loop, exclude them in the mask.
+            mask2 &= __ballot_sync(mask2, nodeAddr != EntrypointSentinel);
         } // traversal
 
         // Remap intersected triangle index, and store the result.
@@ -330,6 +340,7 @@ TRACE_FUNC
         if (hitIndex != -1)
             hitIndex = FETCH_TEXTURE(triIndices, hitIndex, int);
         STORE_RESULT(traversalStack[STACK_SIZE + 2], hitIndex, hitT);
+        mask1 &= __ballot_sync(mask1, aux != 0);
     } while(aux); // persistent threads (always true)
 }
 
