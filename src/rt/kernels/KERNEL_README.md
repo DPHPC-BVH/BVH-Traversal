@@ -1,4 +1,4 @@
-## Description of all the kernels
+Description of all the kernels
 
 | Kernel name          | reference kernel? | algorithm   | data structure     | cuda threads | implementation techniques                                | additional optimizations |
 | -------------------- | ----------------- | ----------- | ------------------ | ------------ | -------------------------------------------------------- | ------------------------ |
@@ -12,7 +12,9 @@
 | |  |  |  |  |  ||
 |fermi_speculative_while_while                 | yes               | stack-based  | BVHLayout_Compact            | non-persistent | while-while, speculative traversal                             ||
 |tesla_persistent_speculative_while_while|  yes               | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    ||
-|tesla_persistent_speculative_while_while_early_break | no                | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    |break traversal loop if more than 16 threads in a warp have found triangles or exited the loop|
+||  |  |  |  |  ||
+|tesla_persistent_while_while_early_break| no | stack-based | BVHLayout_AOS/SOA_AOS/SOA | persistent | while-while |break traversal loop if less than 16 threads in a warp are still traversing|
+|tesla_persistent_speculative_while_while_early_break | no                | stack-based  | BVHLayout_AOS/SOA_AOS/SOA    | persistent     | while-while                                                    |break traversal loop if less than 16 threads in a warp are still traversing|
 | |  |  |  |  |  ||
 |tesla_persistent_speculative_while_while_warp_sync | no | stack-based | BVHLayout_AOS/SOA_AOS/SOA | persistent | while-while, with new warp_sync intrinsics ||
 |tesla_persistent_speculative_while_while_warp_sync_early_break | no | stack-based | BVHLayout_AOS/SOA_AOS/SOA | persistent | while-while, with new warp_sync intrinsics |break traversal loop if more than 16 threads in a warp have found triangles or exited the loop|

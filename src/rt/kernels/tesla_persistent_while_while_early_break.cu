@@ -26,7 +26,7 @@
  */
 
 /*
-    "Persistent speculative while-while" kernel used in:
+    "Persistent while-while kernel" used in:
 
     "Understanding the Efficiency of Ray Traversal on GPUs",
     Timo Aila and Samuli Laine,
@@ -42,6 +42,8 @@
 
 #define LOAD_BALANCER_BATCH_SIZE        96  // Number of rays to fetch at a time. Must be a multiple of 32.
 #define STACK_SIZE                      64  // Size of the traversal stack in local memory.
+#define LOOP_NODE                       100 // Nodes: 1 = if, 100 = while.
+#define LOOP_TRI                        100 // Triangles: 1 = if, 100 = while.
 
 extern "C" __device__ int g_warpCounter;    // Work counter for persistent threads.
 
@@ -85,9 +87,9 @@ TRACE_FUNC
 
     float   origx, origy, origz;    // Ray origin.
     int     stackPtr;               // Current position in traversal stack.
-    int     leafAddr;               // First postponed leaf, non-negative if none.
-    int     nodeAddr;               // Non-negative: current internal node, negative: second postponed leaf.
-    int     hitIndex;               // Triangle index of the closest intersection, -1 if none.
+    int     nodeAddr;               // Current internal node.
+    int     triAddr;                // Start of a pending triangle list.
+    int     triAddr2;               // End of a pending triangle list.
     float   hitT;                   // t-value of the closest intersection.
 
     // Initialize persistent threads.
@@ -144,24 +146,20 @@ TRACE_FUNC
 
             traversalStack[0] = EntrypointSentinel; // Bottom-most entry.
             stackPtr = 0;
-            leafAddr = 0;   // No postponed leaf.
             nodeAddr = 0;   // Start from the root.
-            hitIndex = -1;  // No triangle intersected so far.
+            triAddr  = 0;   // No pending triangle list.
+            triAddr2 = 0;
+            STORE_RESULT(rayidx, -1, 0.0f); // No triangle intersected so far.
             hitT     = d.w; // tmax
         }
 
         // Traversal loop.
 
-        while (nodeAddr != EntrypointSentinel)
+        do
         {
-            float oodx  = origx * aux->idirx;
-            float oody  = origy * aux->idiry;
-            float oodz  = origz * aux->idirz;
+            // Traverse internal nodes.
 
-            // Traverse internal nodes until all SIMD lanes have found a leaf.
-
-            bool searchingLeaf = true;
-            while (nodeAddr >= 0 && nodeAddr != EntrypointSentinel)
+            for (int i = LOOP_NODE - 1; i >= 0 && nodeAddr >= 0 && nodeAddr != EntrypointSentinel; i--)
             {
                 // Fetch AABBs of the two child nodes.
 
@@ -179,6 +177,9 @@ TRACE_FUNC
 
                 // Intersect the ray against the child nodes.
 
+                float oodx  = origx * aux->idirx;
+                float oody  = origy * aux->idiry;
+                float oodz  = origz * aux->idirz;
                 float c0lox = n0xy.x * aux->idirx - oodx;
                 float c0hix = n0xy.y * aux->idirx - oodx;
                 float c0loy = n0xy.z * aux->idiry - oody;
@@ -197,7 +198,6 @@ TRACE_FUNC
                 float c1max = min4(fmaxf(c1lox, c1hix), fmaxf(c1loy, c1hiy), fmaxf(c1loz, c1hiz), hitT);
 
                 // Decide where to go next.
-                // Differs from "while-while" because this just happened to produce better code here.
 
                 bool traverseChild0 = (c0max >= c0min);
                 bool traverseChild1 = (c1max >= c1min);
@@ -205,131 +205,117 @@ TRACE_FUNC
                 nodeAddr           = __float_as_int(cnodes.x);      // stored as int
                 int nodeAddrChild1 = __float_as_int(cnodes.y);      // stored as int
 
-                if (!traverseChild1) { nodeAddrChild1 = EntrypointSentinel; }
-                if (!traverseChild0) { nodeAddr = nodeAddrChild1; nodeAddrChild1 = EntrypointSentinel; }
+                // One child was intersected => go there.
 
-                // Neither child was intersected => pop.
-
-                if (nodeAddr == EntrypointSentinel)
+                if(traverseChild0 != traverseChild1)
                 {
-                    nodeAddr = traversalStack[stackPtr];
-                    --stackPtr;
+                    if (traverseChild1)
+                        nodeAddr = nodeAddrChild1;
                 }
-
-                // Both children were intersected => push the farther one.
-
-                else if (nodeAddrChild1 != EntrypointSentinel)
+                else
                 {
-                    if (c1min < c0min)
-                        swap(nodeAddr, nodeAddrChild1);
-                    ++stackPtr;
-                    traversalStack[stackPtr] = nodeAddrChild1;
-                }
+                    // Neither child was intersected => pop.
 
-                // First leaf => postpone and continue traversal.
+                    if (!traverseChild0)
+                    {
+                        nodeAddr = traversalStack[stackPtr];
+                        --stackPtr;
+                    }
 
-                if (nodeAddr < 0 && leafAddr >= 0)
-                {
-                    searchingLeaf = false;
-                    leafAddr = nodeAddr;
-                    nodeAddr = traversalStack[stackPtr];
-                    --stackPtr;
+                    // Both children were intersected => push the farther one.
+
+                    else
+                    {
+                        if(c1min < c0min)
+                            swap(nodeAddr, nodeAddrChild1);
+                        ++stackPtr;
+                        traversalStack[stackPtr] = nodeAddrChild1;
+                    }
                 }
 
                 // Less than half of the SIMD lanes (16) are still traversing, then proceed to triangle intersection
-                if(__popc(__ballot(searchingLeaf)) < 16 )
+                if(__popc(__ballot(nodeAddr >= 0 )) < 16 )
                     break;
             }
 
-            // Process postponed leaf nodes.
+            // Current node is a leaf => fetch the start and end of the triangle list.
 
-            while (leafAddr < 0)
+            if (nodeAddr < 0 && triAddr >= triAddr2)
             {
-                // Fetch the start and end of the triangle list.
-
 #ifdef NODES_ARRAY_OF_STRUCTURES
-                float4 leaf=FETCH_TEXTURE(nodesA, (-leafAddr-1)*4+3, float4);
+                float4 leaf=FETCH_TEXTURE(nodesA, (-nodeAddr-1)*4+3, float4);
 #else
                 float4 leaf=FETCH_TEXTURE(nodesD, (-nodeAddr-1), float4);
 #endif
-                int triAddr  = __float_as_int(leaf.x);              // stored as int
-                int triAddr2 = __float_as_int(leaf.y);              // stored as int
+                triAddr  = __float_as_int(leaf.x); // stored as int
+                triAddr2 = __float_as_int(leaf.y); // stored as int
 
-                // Intersect the ray against each triangle using Sven Woop's algorithm.
+                // Pop.
 
-                for(; triAddr < triAddr2; triAddr++)
+                nodeAddr = traversalStack[stackPtr];
+                --stackPtr;
+            }
+
+            // Intersect the ray against each triangle using Sven Woop's algorithm.
+
+            for (int i = LOOP_TRI - 1; i >= 0 && triAddr < triAddr2; triAddr++, i--)
+            {
+                // Compute and check intersection t-value.
+
+#ifdef TRIANGLES_ARRAY_OF_STRUCTURES
+                float4 v00 = FETCH_GLOBAL(trisA, triAddr*4+0, float4);
+                float4 v11 = FETCH_GLOBAL(trisA, triAddr*4+1, float4);
+#else
+                float4 v00 = FETCH_GLOBAL(trisA, triAddr, float4);
+                float4 v11 = FETCH_GLOBAL(trisB, triAddr, float4);
+#endif
+                float dirx  = 1.0f / aux->idirx;
+                float diry  = 1.0f / aux->idiry;
+                float dirz  = 1.0f / aux->idirz;
+
+                float Oz = v00.w - origx*v00.x - origy*v00.y - origz*v00.z;
+                float invDz = 1.0f / (dirx*v00.x + diry*v00.y + dirz*v00.z);
+                float t = Oz * invDz;
+
+                if (t > aux->tmin && t < hitT)
                 {
-                    // Compute and check intersection t-value.
+                    // Compute and check barycentric u.
 
-#ifdef TRIANGLES_ARRAY_OF_STRUCTURES
-                    float4 v00 = FETCH_GLOBAL(trisA, triAddr*4+0, float4);
-                    float4 v11 = FETCH_GLOBAL(trisA, triAddr*4+1, float4);
-#else
-                    float4 v00 = FETCH_GLOBAL(trisA, triAddr, float4);
-                    float4 v11 = FETCH_GLOBAL(trisB, triAddr, float4);
-#endif
-                    float dirx = 1.0f / aux->idirx;
-                    float diry = 1.0f / aux->idiry;
-                    float dirz = 1.0f / aux->idirz;
+                    float Ox = v11.w + origx*v11.x + origy*v11.y + origz*v11.z;
+                    float Dx = dirx*v11.x + diry*v11.y + dirz*v11.z;
+                    float u = Ox + t*Dx;
 
-                    float Oz = v00.w - origx*v00.x - origy*v00.y - origz*v00.z;
-                    float invDz = 1.0f / (dirx*v00.x + diry*v00.y + dirz*v00.z);
-                    float t = Oz * invDz;
-
-                    if (t > aux->tmin && t < hitT)
+                    if (u >= 0.0f)
                     {
-                        // Compute and check barycentric u.
-
-                        float Ox = v11.w + origx*v11.x + origy*v11.y + origz*v11.z;
-                        float Dx = dirx*v11.x + diry*v11.y + dirz*v11.z;
-                        float u = Ox + t*Dx;
-
-                        if (u >= 0.0f)
-                        {
-                            // Compute and check barycentric v.
+                        // Compute and check barycentric v.
 
 #ifdef TRIANGLES_ARRAY_OF_STRUCTURES
-                            float4 v22 = FETCH_GLOBAL(trisA, triAddr*4+2, float4);
+                        float4 v22 = FETCH_GLOBAL(trisA, triAddr*4+2, float4);
 #else
-                            float4 v22 = FETCH_GLOBAL(trisC, triAddr, float4);
+                        float4 v22 = FETCH_GLOBAL(trisC, triAddr, float4);
 #endif
-                            float Oy = v22.w + origx*v22.x + origy*v22.y + origz*v22.z;
-                            float Dy = dirx*v22.x + diry*v22.y + dirz*v22.z;
-                            float v = Oy + t*Dy;
+                        float Oy = v22.w + origx*v22.x + origy*v22.y + origz*v22.z;
+                        float Dy = dirx*v22.x + diry*v22.y + dirz*v22.z;
+                        float v = Oy + t*Dy;
 
-                            if (v >= 0.0f && u + v <= 1.0f)
+                        if (v >= 0.0f && u + v <= 1.0f)
+                        {
+                            // Record intersection.
+                            // Closest intersection not required => terminate.
+
+                            hitT = t;
+                            STORE_RESULT(traversalStack[STACK_SIZE + 2], FETCH_GLOBAL(triIndices, triAddr, int), t);
+                            if (anyHit)
                             {
-                                // Record intersection.
-                                // Closest intersection not required => terminate.
-
-                                hitT = t;
-                                hitIndex = triAddr;
-                                if (anyHit)
-                                {
-                                    nodeAddr = EntrypointSentinel;
-                                    break;
-                                }
+                                nodeAddr = EntrypointSentinel;
+                                triAddr = triAddr2; // Breaks the do-while.
+                                break;
                             }
                         }
                     }
-                } // triangle
-
-                // Another leaf was postponed => process it as well.
-
-                leafAddr = nodeAddr;
-                if (nodeAddr < 0)
-                {
-                    nodeAddr = traversalStack[stackPtr];
-                    --stackPtr;
                 }
-            } // leaf
-        } // traversal
-
-        // Remap intersected triangle index, and store the result.
-
-        if (hitIndex != -1)
-            hitIndex = FETCH_TEXTURE(triIndices, hitIndex, int);
-        STORE_RESULT(traversalStack[STACK_SIZE + 2], hitIndex, hitT);
+            } // triangle
+        } while (nodeAddr != EntrypointSentinel || triAddr < triAddr2); // traversal
     } while(aux); // persistent threads (always true)
 }
 
