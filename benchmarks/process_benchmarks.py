@@ -7,6 +7,7 @@ from scipy.stats import shapiro
 import numpy as np
 import argparse
 import statistics
+import math
 
 def process_header(header_row):
     metadata = {}
@@ -166,7 +167,34 @@ def is_reference_kernel(kernel_metadata, kernel):
         return False
     
 
+def get_median_95ci(data):
+    sorted_data = np.sort(data)
+    #print(sorted_data)
+    n = sorted_data.size
+    
+    low = math.floor((n-1.96*np.sqrt(n))/2)
+    high = math.ceil(1+(n+1.96*np.sqrt(n))/2)
 
+    return sorted_data[low], sorted_data[high]
+
+
+def largest_diff_95ci(data_array):
+    diff = 0
+    for data in data_array:
+        #print(data)
+        low, high = get_median_95ci(data)
+        median = np.median(data)
+        diff_low = abs(median-low)/median
+        diff_high = abs(high-median)/median
+        diff = max(diff, diff_low)
+        diff = max(diff, diff_high)
+    return diff
+
+
+def largest_stddev(data_array):
+    stddev = 0
+    for data in data_array:
+        pass
 
 
 
@@ -192,6 +220,8 @@ parser.add_argument('--time', action="store_true", help='do calculations using t
 parser.add_argument('--no_title', action="store_true", help='Remove Titels from the plots')
 parser.add_argument('--xfmt', action="store_true", help='Automatically rotate labels on the x-axis to prevent overlaps')
 parser.add_argument('--plot_cnf', action="store", help='path to the plot config file')
+parser.add_argument('--plot_stat_data', action="store_true", help='adds an aditional box with statistical information to the plot')
+parser.add_argument('--bar_plot', action="store_true", help='makes bar plots')
 
 args = parser.parse_args()
 
@@ -286,19 +316,26 @@ if args.QQ_plot:
             plt.savefig(out_path + 'QQ/' + scene_name + "_" + kernel + "_" + ray_types[i] + "_" + str(benchmark_info["num_measure"]) + ".png")
 
 
-if args.box_plot:
+if args.box_plot or args.bar_plot:
     label_list = get_kernel_label_list(kernel_plot_metadata, output_kernels)
     for i in range(len(rays)):
         data = get_plot_data(data, i, kernels, output_kernels)
         #data = get_box_plot_data(mray_data, i)
         plt.figure(figsize =(10, 7))
         fig, ax = plt.subplots(figsize = (10, 7))
- 
+
+        #plt.figure()
+        #fig, ax = plt.subplots()
+
+        #plt.figure(figsize =(15, 10.5))
+        #fig, ax = plt.subplots(figsize = (15, 10.5))
         # Creating plot
         
         boxprops = dict(linestyle='--', linewidth=1.5)
         medianprops = dict(linewidth=1.5)
         bplot = plt.boxplot(data, notch=True, labels=label_list, patch_artist=True, boxprops=boxprops, medianprops=medianprops)
+
+        
 
         if args.time:
             y_label = plt.ylabel('Runtime [ms]', fontsize=16, labelpad=10)
@@ -336,8 +373,19 @@ if args.box_plot:
         # format x-labels
         if args.xfmt:
             fig.autofmt_xdate()
-                
 
+        # add statistical data
+        if args.plot_stat_data:
+            text_props = dict(boxstyle='round', facecolor='wheat')
+
+            diff = largest_diff_95ci(data)
+            ci_diff = "%.2f" % (diff*100)
+            stat_str = r'$95 \% \ CI: \pm$ ' + ci_diff + r'$\%$' 
+
+            # place a text box in upper left in axes coords
+            ax.text(0.95, 0.95, stat_str, transform=ax.transAxes, fontsize=14, verticalalignment='top', horizontalalignment='right', bbox=text_props)  
+                
+        fig.tight_layout()
         
         plt.savefig(out_path + scene_name + "_" + ray_types[i] + "_" + str(benchmark_info["num_measure"]) + ".png")
         #plt.show()

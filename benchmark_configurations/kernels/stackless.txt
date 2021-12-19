@@ -7,4 +7,3 @@ kernel: pascal_stackless_opt3
 kernel: pascal_stackless_opt5
 kernel: pascal_speculative_stackless_tex1d_2
 kernel: pascal_speculative_stackless_tex1d_opt5
-
