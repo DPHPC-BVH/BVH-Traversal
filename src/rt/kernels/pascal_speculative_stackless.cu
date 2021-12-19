@@ -232,8 +232,8 @@ TRACE_FUNC
 
             // All SIMD lanes have found a leaf => process them.
 
-            if(!__any_sync(FULL_MASK, searchingLeaf))
-                break;
+            if(!__any((int)searchingLeaf))
+                    break;
         }
 
         // Process postponed leaf nodes.

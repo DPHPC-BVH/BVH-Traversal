@@ -355,7 +355,7 @@ TRACE_FUNC
 
             // DYNAMIC FETCH
 
-            if( __popc(__ballot_sync(__activemask(), true)) < DYNAMIC_FETCH_THRESHOLD )
+            if( __popc(__ballot(true)) < DYNAMIC_FETCH_THRESHOLD )
                 break;
 
             //if( __popc(__ballot(true)) < DYNAMIC_FETCH_THRESHOLD )
