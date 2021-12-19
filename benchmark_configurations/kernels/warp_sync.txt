@@ -1,0 +1,2 @@
+kernel: tesla_persistent_speculative_while_while_warp_sync
+kernel: tesla_persistent_speculative_while_while_warp_sync_early_break
