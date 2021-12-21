@@ -12,8 +12,9 @@ setup = "benchmark_configurations/setup/benchmark_batch_50.txt"
 
 kernels = [ "./benchmark_configurations/kernels/warmup.txt",
             "./benchmark_configurations/kernels/stackless.txt",
+            "./benchmark_configurations/kernels/early_break.txt",
             "./benchmark_configurations/kernels/reference_kernels.txt", 
-            "./benchmark_configurations/kernels/early_break.txt" ]
+             ]
 
 
 for scene in scenes:
