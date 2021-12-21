@@ -717,7 +717,7 @@ void FW::runBenchmark(
                 while (renderer.nextBatch())
                 {
                     // Render and display result.
-
+                    
                     renderer.traceBatch();
                     renderer.updateResult();
                     window.setVisible(true);
@@ -727,7 +727,7 @@ void FW::runBenchmark(
                         renderer.displayResult(gl);
                         gl->swapBuffers();
                     }
-
+                    
                     // Warm up and measure.
 
 
@@ -961,17 +961,16 @@ void FW::runBenchmarkMultipleRuns(
                     {
                         // Render and display result.
 
-                        /*
                         renderer.traceBatch();
                         renderer.updateResult();
                         window.setVisible(true);
                         Window::pollMessages();
-                        for (int i = 0; i < 3; i++)
+                        for (int i = 0; i < 1; i++)
                         {
                             renderer.displayResult(gl);
                             gl->swapBuffers();
                         }
-                        */
+                    
 
                         //  measure.
 

@@ -1,0 +1,9 @@
+# <kernel_identifier>, <plot_label>,<reference/own>
+pascal_speculative_stackless_tex1d_2, speculative stackless v1, own
+pascal_speculative_stackless_tex1d_opt5, speculative stackless v2, own
+pascal_persistent_stackless_opt3, persistent stackless v1, own
+pascal_persistent_stackless_opt5, persistent stackless v2, own
+pascal_dynamic_fetch_stackless, dynamic fetch stackless v1, own
+pascal_dynamic_fetch_stackless_opt5, dynamic fetch stackless v2, own
+pascal_stackless_opt3, stackless v1, own
+pascal_stackless_opt5, stackless v2, own

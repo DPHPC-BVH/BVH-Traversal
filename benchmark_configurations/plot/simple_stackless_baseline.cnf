@@ -1,0 +1,11 @@
+# <kernel_identifier>, <plot_label>,<reference/own>
+pascal_speculative_stackless_tex1d_2, speculative stackless, own
+pascal_persistent_stackless_opt3, persistent stackless, own
+pascal_dynamic_fetch_stackless, dynamic fetch stackless, own
+pascal_stackless_opt3, stackless, own
+# reference kernels
+kepler_dynamic_fetch, dynamic fetch, reference
+fermi_speculative_while_while, speculative while while, reference
+tesla_persistent_while_while, persistent while while, reference
+tesla_persistent_speculative_while_while, persistent speculative while while, reference
+tesla_persistent_packet, persistent packet, reference

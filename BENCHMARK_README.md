@@ -3,7 +3,7 @@
 To run a single benchmark from a given configuration execute:
 
 ```
-python single_benchmark.py <config_1>  <config_2> ...
+python single_benchmark.py <config_1> <config_2> ...
 ```
 
 Example:

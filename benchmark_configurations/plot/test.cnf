@@ -1,0 +1,4 @@
+# <kernel_identifier>, <plot_label>,<reference/own>
+pascal_speculative_stackless_tex1d_2, speculative stackless, own
+# reference kernels
+kepler_dynamic_fetch, dynamic fetch, reference

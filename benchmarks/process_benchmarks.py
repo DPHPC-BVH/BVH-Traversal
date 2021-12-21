@@ -1,9 +1,11 @@
 import csv
+from os import error
 import sys
 import matplotlib.pyplot as plt
 from scipy.stats.stats import _equal_var_ttest_denom
 from statsmodels.graphics.gofplots import qqplot
 from scipy.stats import shapiro
+import scipy
 import numpy as np
 import argparse
 import statistics
@@ -103,10 +105,10 @@ def get_time_per_measurement_ms(info, data, drop_warmup):
 def print_mrays_per_measurement(info, mray_data, kernels, rays):
     for kernel_id in range(len(mray_data)):
         for measure_id in range(len(mray_data[kernel_id])):
-            #print("\n%s %d " % (kernels[kernel_id], measure_id),end='')
+            print("\n%s %d " % (kernels[kernel_id], measure_id),end='')
             for ray_id in range(len(mray_data[kernel_id][measure_id])):
                 mrays = mray_data[kernel_id][measure_id][ray_id]
-               #print("\t%f" % mrays, end='')
+                print("\t%f" % mrays, end='')
 
 def get_box_plot_data(mray_data, ray_type):
     data = []
@@ -227,8 +229,89 @@ def get_primary_plus_ao_time(data, kernels, output_kernels):
         optix_data.append(optix_mes)
 
     return optix_data
-    
 
+
+def get_medians(data):
+    medians = []
+    for measurements in data:
+        m = np.median(measurements)
+        medians.append(m)
+    return medians
+
+def get_arithmetic_means(data):
+    means = []
+    for measurements in data:
+        m = np.mean(measurements)
+        means.append(m)
+    return means
+
+
+def mean_confidence_interval_error(data, confidence=0.95):
+    a = 1.0 * np.array(data)
+    n = len(a)
+    m, se = np.mean(a), scipy.stats.sem(a)
+    h = se * scipy.stats.t.ppf((1 + confidence) / 2., n-1)
+    print ("mean, error: %f %f" %(m, h))
+    error = h/m
+    return error
+
+def mean_largest_diff_95ci(data_array):
+    diff = 0
+    for data in data_array:
+        err = mean_confidence_interval_error(data)
+        diff = max(diff,err)
+    return diff
+
+def mean_95ci_errors(data_array):
+    errors = []
+    for data in data_array:
+        errors.append(mean_confidence_interval_error(data))
+    return errors
+
+def median_95ci_errors(data_array):
+    min = []
+    max = []
+    for data in data_array:
+        median = np.median(data)
+        low, high  = get_median_95ci(data)
+        min.append(median - low)
+        max.append(high - median)
+    return [min,max]
+
+        
+def read_benchmark_file(path):
+    b_info = None
+    b_data = []
+    b_kernels = []
+    with open(path, newline='') as csvfile:
+        spamreader = csv.reader(csvfile, delimiter=',', quotechar='|')
+        for row in spamreader:
+            if row[0] == '#header':
+                b_info = process_header(row)
+                init_data(b_info, b_data)
+                #print(benchmark_info)
+            
+            else:
+                kernel = row[0].strip()
+                if kernel not in b_kernels:
+                    b_kernels.append(kernel)
+                kernel_index = b_kernels.index(kernel)
+
+                measurment = int(row[1])
+
+                ray_type = row[2].strip()
+                if ray_type not in rays:
+                    rays.append(ray_type)
+                ray_index = rays.index(ray_type)
+
+                camera = int(row[3])
+                time_mes = float(row[4])
+                rays_mes = int(row[5])
+
+                b_data[kernel_index][measurment][ray_index][camera]["time"] = time_mes
+                b_data[kernel_index][measurment][ray_index][camera]["rays"] = rays_mes
+
+    return b_info, b_kernels, b_data
 
 #def get_optix_time_data(data):
     #pass
@@ -259,49 +342,20 @@ parser.add_argument('--xfmt', action="store_true", help='Automatically rotate la
 parser.add_argument('--plot_cnf', action="store", help='path to the plot config file')
 parser.add_argument('--plot_stat_data', action="store_true", help='adds an aditional box with statistical information to the plot')
 parser.add_argument('--bar_plot', action="store_true", help='makes bar plots')
+parser.add_argument('--no_color_fill', action="store_true", help='don\'t fill boxes with different colors')
+parser.add_argument('--bar_ci', action="store_true", help='adds CIs to bar plots')
+parser.add_argument('--bar_average', action="store_true", help='creates bar plots using averages')
 parser.add_argument('--optix_src', action="store", help='Path to the optix benchmark dump which should be compared against')
+parser.add_argument('--optix_add', action="store", nargs='+', help='Use multiple scene benchmarks provided here as a list instead of src to compare against optix')
+
+
 
 args = parser.parse_args()
-
-
-benchmark_info = None
-data = []
-kernels = []
 
 rays = []
 ray_types = ["Primary", "AO", "Diffuse"]
 
-
-
-with open(args.src, newline='') as csvfile:
-    spamreader = csv.reader(csvfile, delimiter=',', quotechar='|')
-    for row in spamreader:
-        if row[0] == '#header':
-            benchmark_info = process_header(row)
-            init_data(benchmark_info, data)
-            #print(benchmark_info)
-            
-        else:
-            kernel = row[0].strip()
-            if kernel not in kernels:
-                kernels.append(kernel)
-            kernel_index = kernels.index(kernel)
-
-            measurment = int(row[1])
-
-            ray_type = row[2].strip()
-            if ray_type not in rays:
-                rays.append(ray_type)
-            ray_index = rays.index(ray_type)
-
-            camera = int(row[3])
-            time_mes = float(row[4])
-            rays_mes = int(row[5])
-
-            data[kernel_index][measurment][ray_index][camera]["time"] = time_mes
-            data[kernel_index][measurment][ray_index][camera]["rays"] = rays_mes
-
-            #print(' '.join(row))
+benchmark_info, kernels, data = read_benchmark_file(args.src)
 
 
 if args.plot_cnf is None:
@@ -320,6 +374,7 @@ else:
 
 print_mrays_per_measurement(benchmark_info, mray_data, kernels, rays)
 print("\n")
+
 #np.random.seed(10)
 # returns a list containing a np.array for each kernel with all Mray/s measurements as float
 # the second parameter decides which ray type should be extracted: 0=>Primary, 1=>AO, 2=>diffuse
@@ -354,21 +409,89 @@ if args.QQ_plot:
             plt.savefig(out_path + 'QQ/' + scene_name + "_" + kernel + "_" + ray_types[i] + "_" + str(benchmark_info["num_measure"]) + ".png")
 
 if args.optix_src is not None:
-    
-    optix_measurements = get_optix_measurements(args.optix_src, benchmark_info["obj_file"])
-    ao_p_data = get_primary_plus_ao_time(mray_data, kernels, output_kernels)
-    
-    ao_p_data.append(optix_measurements)
-    kernels.append("optix")
-    output_kernels.append("optix")
-    label_list = get_kernel_label_list(kernel_plot_metadata, output_kernels)
+    # array of means/medians for each kernel 
+    bar_data = []
+    errors = []
 
-    plt.figure(figsize =(10, 7))
-    fig, ax = plt.subplots(figsize = (10, 7))
+    labels = []
 
-    boxprops = dict(linestyle='--', linewidth=1.5)
-    medianprops = dict(linewidth=1.5)
-    bplot = plt.boxplot(ao_p_data, notch=True, labels=label_list, patch_artist=True, boxprops=boxprops, medianprops=medianprops)
+    if args.optix_add is not None:
+
+        plt.figure(figsize =(10, 7))
+        fig, ax = plt.subplots(figsize = (10, 7))
+
+        label_list = get_kernel_label_list(kernel_plot_metadata, output_kernels)
+        label_list.append("optix")
+        bar_data = [] 
+        for idx in range(len(label_list)):
+            bar_data.append([])
+
+        print(bar_data)
+        print("label list")
+        print(label_list)
+        plot_data = None
+        for scene_benchmark in args.optix_add:
+
+            benchmark_scene_info, scene_kernels, scene_data = read_benchmark_file(scene_benchmark)
+
+            labels.append(benchmark_scene_info["obj_file"])
+
+            if args.plot_cnf is None:
+                output_kernels = kernels.copy()
+            raw_data = get_time_per_measurement_ms(benchmark_scene_info, scene_data, True)
+            ao_p_data = get_primary_plus_ao_time(raw_data, scene_kernels, output_kernels)
+            optix_measurements = get_optix_measurements(args.optix_src, benchmark_scene_info["obj_file"])
+            ao_p_data.append(optix_measurements)
+            scene_kernels.append("optix")
+
+            summarized_data = None
+            if args.bar_average:
+                summarized_data = get_arithmetic_means(ao_p_data)
+            else:
+                summarized_data = get_medians(ao_p_data)
+
+            for idx, data_point in enumerate(summarized_data):
+                d = bar_data[idx]
+                d.append(data_point)
+                print(bar_data)
+
+        print("scene labels:")
+        print(labels)
+
+        x = np.arange(len(labels))
+
+
+        for idx, kernel_label in enumerate(label_list):
+            print("kernel: %s" %(kernel_label))
+            print(bar_data[idx])
+            ax.bar(x + idx*0.05, bar_data[idx], 0.05, label=kernel_label)
+
+        ax.set_xticks(x + 0.05*len(label_list)/2-0.025)
+        ax.set_xticklabels(labels)    
+
+        ax.legend()
+
+        #barplot = plt.bar(label_list, plot_data)
+        max_y_lim = max(summarized_data)*1.2
+        min_y_lim = 0
+        plt.ylim(min_y_lim, max_y_lim)
+        
+    
+
+            
+
+    
+    #optix_measurements = get_optix_measurements(args.optix_src, benchmark_info["obj_file"])
+    #ao_p_data = get_primary_plus_ao_time(mray_data, kernels, output_kernels)
+    
+    
+    #label_list = get_kernel_label_list(kernel_plot_metadata, output_kernels)
+
+    
+
+    #boxprops = dict(linestyle='--', linewidth=1.5)
+    #medianprops = dict(linewidth=1.5)
+    #bplot = plt.boxplot(ao_p_data, notch=True, labels=label_list, patch_artist=True, boxprops=boxprops, medianprops=medianprops)
 
         
 
@@ -382,11 +505,11 @@ if args.optix_src is not None:
     plt.yticks(fontsize=16)
     plt.xticks(fontsize=16)
 
-    for idx, box in enumerate(bplot['boxes']):
-            if is_reference_kernel(kernel_plot_metadata, output_kernels[idx]):
-                box.set_facecolor('lightblue')
-            else:
-                box.set_facecolor('lightgreen')
+    #for idx, box in enumerate(bplot['boxes']):
+    #        if is_reference_kernel(kernel_plot_metadata, output_kernels[idx]):
+    #            box.set_facecolor('lightblue')
+    #        else:
+    #            box.set_facecolor('lightgreen')
 
     # set border
     for axis in ['top','bottom','left','right']:
@@ -403,7 +526,7 @@ if args.optix_src is not None:
 
     fig.tight_layout()
 
-    plt.show()
+    plt.savefig(out_path + "optix_comp_" + str(benchmark_info["num_measure"]) + ".png")
 
 
     exit()
@@ -423,9 +546,38 @@ if args.box_plot or args.bar_plot:
         #fig, ax = plt.subplots(figsize = (15, 10.5))
         # Creating plot
         
-        boxprops = dict(linestyle='--', linewidth=1.5)
-        medianprops = dict(linewidth=1.5)
-        bplot = plt.boxplot(plot_data, notch=True, labels=label_list, patch_artist=True, boxprops=boxprops, medianprops=medianprops)
+        bplot = None
+        barplot = None
+
+        
+
+        if args.box_plot:
+            boxprops = dict(linestyle='--', linewidth=1.5, facecolor = '#d9d9d9')
+            medianprops = dict(linewidth=1.5)
+            bplot = plt.boxplot(plot_data, notch=True, labels=label_list, patch_artist=True, boxprops=boxprops, medianprops=medianprops)
+        elif args.bar_plot:
+            summarized_data = None
+            y_error = None
+            if args.bar_average:
+                summarized_data = get_arithmetic_means(plot_data)
+                y_error = mean_95ci_errors(plot_data)
+                
+            else:
+                summarized_data = get_medians(plot_data)
+                y_error = median_95ci_errors(plot_data)
+                print(summarized_data)
+                print(y_error)
+                factor = statistics.NormalDist().inv_cdf((1+0.95)/2)
+                print(factor)
+
+            print(summarized_data)
+            print(label_list)
+            #low errors = [su]
+
+            barplot = plt.bar(label_list, summarized_data, yerr=y_error, capsize=2, width=0.4)
+            max_y_lim = max(summarized_data)*1.2
+            min_y_lim = 0
+            plt.ylim(min_y_lim, max_y_lim)
 
         
 
@@ -447,11 +599,19 @@ if args.box_plot or args.bar_plot:
             plt.title(title, fontsize=20, pad=15)
 
         # set colors
-        for idx, box in enumerate(bplot['boxes']):
-            if is_reference_kernel(kernel_plot_metadata, output_kernels[idx]):
-                box.set_facecolor('lightblue')
-            else:
-                box.set_facecolor('lightgreen')
+        if args.box_plot and not args.no_color_fill:
+            for idx, box in enumerate(bplot['boxes']):
+                if is_reference_kernel(kernel_plot_metadata, output_kernels[idx]):
+                    box.set_facecolor('lightblue')
+                else:
+                    box.set_facecolor('lightgreen')
+        elif args.bar_plot and not args.no_color_fill:
+            for idx, bar in enumerate(barplot):
+                bar.set_alpha(1.0)
+                if is_reference_kernel(kernel_plot_metadata, output_kernels[idx]):
+                    bar.set_facecolor('lightblue')
+                else:
+                    bar.set_facecolor('lightgreen')
 
         # set border
         for axis in ['top','bottom','left','right']:
@@ -460,7 +620,9 @@ if args.box_plot or args.bar_plot:
         ax.yaxis.set_tick_params(width=1.5)
 
         # set grid
+        
         ax.yaxis.grid()
+        ax.set_axisbelow(True)
 
         # format x-labels
         if args.xfmt:
@@ -469,17 +631,33 @@ if args.box_plot or args.bar_plot:
         # add statistical data
         if args.plot_stat_data:
             text_props = dict(boxstyle='round', facecolor='wheat')
+            if args.bar_average:
+                diff = mean_largest_diff_95ci(plot_data)
+            else:
+                diff = largest_diff_95ci(plot_data)
 
-            diff = largest_diff_95ci(plot_data)
             ci_diff = "%.2f" % (diff*100)
-            stat_str = r'$95 \% \ CI: \pm$ ' + ci_diff + r'$\%$' 
+            if args.bar_average:
+                stat_str = r'$95 \% \ CI(mean): \pm$ '
+            else:
+                stat_str = r'$95 \% \ CI: \pm$ '
+
+            stat_str += ci_diff + r'$\%$' 
+            stat_str += "\n"
+            stat_str += r'measurements: ' + str(benchmark_info["num_measure"])
 
             # place a text box in upper left in axes coords
             ax.text(0.95, 0.95, stat_str, transform=ax.transAxes, fontsize=14, verticalalignment='top', horizontalalignment='right', bbox=text_props)  
                 
         fig.tight_layout()
         
-        plt.savefig(out_path + scene_name + "_" + ray_types[i] + "_" + str(benchmark_info["num_measure"]) + ".png")
+        suffix = ""
+        if args.bar_plot:
+            suffix += "_bar"
+        if args.bar_average:
+            suffix += "_mean"
+
+        plt.savefig(out_path + scene_name + "_" + ray_types[i] + "_" + str(benchmark_info["num_measure"]) + suffix + ".png")
         #plt.show()
 
 if args.dump_table:
@@ -501,8 +679,10 @@ if args.dump_table:
             for j, mes in enumerate(d):
                 #print("\t %.2f" % (mes))
                 measurement_dump += ("  (%d)\t %.2f\n" % (j+1, mes))
+    
 
     file_name = scene_name + "_" + str(benchmark_info["num_measure"]) + "_dump" + ".txt"
+
     file_path = 'benchmarks/dump/' + file_name
     with open(file_path, "w") as o_file:
         o_file.write("%s" % measurement_dump)
