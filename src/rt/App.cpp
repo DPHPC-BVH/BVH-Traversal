@@ -672,8 +672,13 @@ void FW::runBenchmark(
     // kernels, RayTypes, cameras, measurements
 
     Array<F32> time_results;
-    Array<F32> rays_results;
+    Array<S64> rays_results;
     Array<F32> results;
+
+    // temporary data structures
+    F32* tmp_time = (F32*)malloc(sizeof(F32) * measureRepeats);
+    S64* tmp_rays = (S64*)malloc(sizeof(S64) * measureRepeats);
+
     for (int kernelIdx = 0; kernelIdx < kernels.getSize(); kernelIdx++)
     {
         for (int rayType = 0; rayType < numRayTypes; rayType++)
@@ -705,7 +710,10 @@ void FW::runBenchmark(
                 totalRays += rays * measureRepeats;
 
                 // Process each batch.
-
+                for (int i = 0; i < measureRepeats; i++) {
+                    tmp_time[i] = 0.0f;
+                    tmp_rays[i] = rays;
+                }
                 while (renderer.nextBatch())
                 {
                     // Render and display result.
@@ -722,17 +730,25 @@ void FW::runBenchmark(
 
                     // Warm up and measure.
 
+
+                    
                     for (int i = 0; i < warmupRepeats; i++)
                         renderer.traceBatch();
+
+                   
                     for (int i = 0; i < measureRepeats; i++){
                         launchTime = renderer.traceBatch();
                         totalLaunchTime += launchTime;
-                        time_results.add(launchTime);
-                        rays_results.add(rays);
+                        tmp_time[i] += launchTime;
                     }
-                        
+                      
                 }
 
+                // store single result
+                for (int i = 0; i < measureRepeats; i++) {
+                    time_results.add(tmp_time[i]);
+                    rays_results.add(tmp_rays[i]);
+                }
         
 
                 // Error => skip.
@@ -745,11 +761,15 @@ void FW::runBenchmark(
 
             F32 mraysPerSec = (F32)totalRays / totalLaunchTime * 1.0e-6f;
             results.add(mraysPerSec);
-            printf("ms/frame = %.2f\n", totalLaunchTime / ((F32)measureRepeats));
+            printf("s/measurement = %.3f\n", totalLaunchTime / ((F32)measureRepeats));
+            printf("s/frame = %.4f\n", totalLaunchTime / ((F32)measureRepeats*cameras.getSize()));
             printf("Mrays/s = %.2f\n", mraysPerSec);
             printf("\n");
         }
     }
+
+    free(tmp_time);
+    free(tmp_rays);
 
     // Print summary table.
 
@@ -776,10 +796,13 @@ void FW::runBenchmark(
             printf("%-10.2f", results[i * numRayTypes + j]);
         printf("\n");
     }
-    /*
+    
     // test
     S32 num_kernels = kernels.getSize();
     S32 num_cameras = cameras.getSize();
+    S32 camera_block_size = measureRepeats;
+    S32 ray_block_size = camera_block_size * num_cameras;
+    S32 kernel_block_size = numRayTypes * ray_block_size;
     for (int i = 0; i < num_kernels; i++)
     {
         printf("(test)%-42s", kernels[i].getPtr());
@@ -789,8 +812,8 @@ void FW::runBenchmark(
             for (int k = 0; k < num_cameras; k++) {
                 
                 for (int q = 0; q < measureRepeats; q++) {
-                    totalRays += rays_results[i * numRayTypes + j * num_cameras + k * measureRepeats + q];
-                    totalTime += time_results[i * numRayTypes + j * num_cameras + k * measureRepeats + q];
+                    totalRays += rays_results[i * kernel_block_size + j * ray_block_size + k * camera_block_size + q];
+                    totalTime += time_results[i * kernel_block_size + j * ray_block_size + k * camera_block_size + q];
                 }
             }
             F32 total_Mrayss = (F32)totalRays / totalTime * 1.0e-6f;
@@ -799,7 +822,7 @@ void FW::runBenchmark(
             
         printf("\n");
     }
-    */
+    
 
 
     printf("%-42s", "---");
@@ -807,6 +830,10 @@ void FW::runBenchmark(
         printf("%-10s", "---");
     printf("\n");
     printf("\n");
+
+    printf("\n");
+    // warmups are already excluded
+    logBenchmark(meshFile, kernels, cameras, time_results, rays_results, 0, measureRepeats, numRayTypes, true);
 }
 
 void FW::runBenchmarkMultipleRuns(
@@ -1439,6 +1466,54 @@ void FW::init(void)
     }
 }
 
+void FW::logBenchmark(const String& mesh_file, const Array<String>& kernels, const Array<String>& cameras, Array<F32>& time_results, Array<S64>& ray_results, S32 num_warmup, S32 num_measurments, S32 num_rays, bool drop_first_kernel) {
+
+    char* cwd = _getcwd(NULL, 0);
+
+    Array<String> p, q;
+    mesh_file.split('.', p);
+    p[0].split('/', q);
+
+    String output_path = String(cwd) + "\\benchmarks\\out\\" + q[q.getSize() - 1] + "_" + String(num_measurments) + "_batchmode" + ".txt";
+    FW::printf("%s\n", output_path.getPtr());
+
+
+    File file(output_path, File::Modify);
+    BufferedOutputStream out(file);
+
+
+    S32 num_kernels = kernels.getSize();
+    S32 num_cameras = cameras.getSize();
+    S32 camera_block_size = num_measurments;
+    S32 ray_block_size = camera_block_size * num_cameras;
+    S32 kernel_block_size = num_rays * ray_block_size;
+
+    int ksize = drop_first_kernel ? kernels.getSize() - 1 : kernels.getSize();
+
+    out.writef("#header, %s, %d, %d, %d, %d, %d\n", mesh_file.getPtr(), ksize, cameras.getSize(), num_rays, 0, num_measurments);
+
+    int start_kernel = drop_first_kernel ? 1 : 0;
+
+    for (int i = start_kernel; i < num_kernels; i++)
+    {
+        for (int j = 0; j < num_rays; j++) {
+            S64 totalRays = 0;
+            F32 totalTime = 0;
+            for (int k = 0; k < num_cameras; k++) {
+
+                for (int q = 0; q < num_measurments; q++) {
+                    S32 index = i * kernel_block_size + j * ray_block_size + k * camera_block_size + q;
+                    S64 rays = ray_results[index];
+                    F32 time = time_results[index];
+                    out.writef("%s, %d, %s, %d, %f, %ld\n", kernels[i].getPtr(), q, s_rayTypeNames[j], k, time, rays);
+                }
+            }
+            F32 total_Mrayss = (F32)totalRays / totalTime * 1.0e-6f;
+        }
+
+        out.flush();
+    }
+}
 
 void FW::logBenchmarkMultipleRuns(const String& mesh_file, const Array<String>& kernels, const Array<String>& cameras, Array<F32>& time_results, Array<S64>& ray_results, S32 num_warmup, S32 num_measurments, S32 num_rays) {
     char* cwd = _getcwd(NULL, 0);
@@ -1463,6 +1538,7 @@ void FW::logBenchmarkMultipleRuns(const String& mesh_file, const Array<String>& 
     // header
     out.writef("#header, %s, %d, %d, %d, %d, %d\n", mesh_file.getPtr(), kernels.getSize(), cameras.getSize(), num_rays, num_warmup, num_measurments);
 
+    
 
     // construct csv
     for (int kernelIdx = 0; kernelIdx < kernels.getSize(); kernelIdx++) {

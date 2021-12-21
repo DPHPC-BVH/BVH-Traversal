@@ -145,7 +145,7 @@ void runBenchmarkFrame(
     int                     measureRepeats,
     bool                    preprocess);
 
-
+void logBenchmark(const String& mesh_file, const Array<String>& kernels, const Array<String>& cameras, Array<F32>& time_results, Array<S64>& ray_results, S32 num_warmup, S32 num_measurments, S32 num_rays, bool drop_first_kernel);
 void logBenchmarkMultipleRuns(const String& mesh_file, const Array<String>& kernels, const Array<String>& cameras, Array<F32>& time_results, Array<S64>& ray_results, S32 num_warmup, S32 num_measurments, S32 num_rays);
 
 //------------------------------------------------------------------------
