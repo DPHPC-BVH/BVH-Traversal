@@ -99,7 +99,7 @@ TRACE_FUNC
         // Fetch new rays from the global pool using lane 0.
 
         const bool          terminated     = nodeAddr==EntrypointSentinel;
-        const unsigned int  maskTerminated = __ballot_sync(FULL_MASK, terminated);
+        const unsigned int  maskTerminated = __ballot(terminated);
         //const unsigned int  maskTerminated = __ballot(terminated);
         
         const int           numTerminated  = __popc(maskTerminated);
@@ -276,14 +276,14 @@ TRACE_FUNC
 
             */
                 
-                if(!__any_sync(FULL_MASK, leafAddr >= 0))
-                    break;
+                //if(!__any_sync(FULL_MASK, leafAddr >= 0))
+                //    break;
 
                 //if(__all_sync(FULL_MASK, leafAddr < 0))
                 //    break;
                 
-                //if(!__any(leafAddr >= 0))
-                //    break;
+                if(!__any(leafAddr >= 0))
+                    break;
                 
             }
 
