@@ -123,6 +123,7 @@ def get_box_plot_data(mray_data, ray_type):
 # output kernels: list of kernels for which data should e returned
 # data is returned in the same order as defined by output_kernels
 def get_plot_data(p_data, ray_type, all_kernels, output_kernels):
+ 
     data = []
     for kernel in output_kernels:
         d = []
@@ -203,15 +204,15 @@ def get_optix_measurements(path, scene_id):
     with open(path, newline='') as csvfile:
         reader = csv.reader(csvfile, delimiter=',')
         for row in reader:
-            if row[0].strip() == '#header' or not (row[0].strip()  == scene_id.strip()):
+            if row[0].strip() == '#header' or not (row[0].split("/")[-1].strip()  == scene_id.strip()):
                 pass
             else:
                 num_measurement = len(row) - 2
                 if data == None:
                     data = [0.0] * num_measurement
                 for i in range(num_measurement):
-                    # assume measurements are in s
-                    data[i] += float(row[i+2].strip())*1000
+                    # assume measurements are in us
+                    data[i] += float(row[i+2].strip())/1000
 
     print(data)
     return np.array(data)
@@ -363,7 +364,7 @@ if args.plot_cnf is None:
     output_kernels = kernels.copy()
 else:
     k_list, kernel_plot_metadata = get_plot_cnf(args.plot_cnf)
-    output_kernels = [x for x in kernels if x in k_list]
+    output_kernels = [x for x in k_list if x in kernels]
 
 print("\n\n")
 #print_raw_data(benchmark_info, data, kernels, rays)
@@ -434,13 +435,16 @@ if args.optix_src is not None:
 
             benchmark_scene_info, scene_kernels, scene_data = read_benchmark_file(scene_benchmark)
 
-            labels.append(benchmark_scene_info["obj_file"])
+            labels.append(benchmark_scene_info["obj_file"].split(".")[0])
 
             if args.plot_cnf is None:
                 output_kernels = kernels.copy()
             raw_data = get_time_per_measurement_ms(benchmark_scene_info, scene_data, True)
             ao_p_data = get_primary_plus_ao_time(raw_data, scene_kernels, output_kernels)
             optix_measurements = get_optix_measurements(args.optix_src, benchmark_scene_info["obj_file"])
+
+            num_mes = min(len(ao_p_data[0]), len(optix_measurements))
+            print(optix_measurements)
             ao_p_data.append(optix_measurements)
             scene_kernels.append("optix")
 
@@ -460,16 +464,21 @@ if args.optix_src is not None:
 
         x = np.arange(len(labels))
 
+        num_items = len(args.optix_add)
+
+        margin = 0.2
+        width = (1.-2.*margin)/num_items
 
         for idx, kernel_label in enumerate(label_list):
+            xdata = x+margin+(idx*width)
             print("kernel: %s" %(kernel_label))
             print(bar_data[idx])
-            ax.bar(x + idx*0.05, bar_data[idx], 0.05, label=kernel_label)
+            ax.bar(xdata, bar_data[idx], width, label=kernel_label)
 
-        ax.set_xticks(x + 0.05*len(label_list)/2-0.025)
+        ax.set_xticks(x + 0.5)
         ax.set_xticklabels(labels)    
 
-        ax.legend()
+        #ax.legend()
 
         #barplot = plt.bar(label_list, plot_data)
         max_y_lim = max(summarized_data)*1.2
@@ -519,6 +528,7 @@ if args.optix_src is not None:
 
     # set grid
     ax.yaxis.grid()
+    ax.set_axisbelow(True)
 
     # format x-labels
     if args.xfmt:
@@ -630,7 +640,7 @@ if args.box_plot or args.bar_plot:
 
         # add statistical data
         if args.plot_stat_data:
-            text_props = dict(boxstyle='round', facecolor='wheat')
+            text_props = dict(facecolor='wheat', edgecolor='black', boxstyle='round,pad=0.5')
             if args.bar_average:
                 diff = mean_largest_diff_95ci(plot_data)
             else:
@@ -647,7 +657,7 @@ if args.box_plot or args.bar_plot:
             stat_str += r'measurements: ' + str(benchmark_info["num_measure"])
 
             # place a text box in upper left in axes coords
-            ax.text(0.95, 0.95, stat_str, transform=ax.transAxes, fontsize=14, verticalalignment='top', horizontalalignment='right', bbox=text_props)  
+            ax.text(0.05, 0.925, stat_str, transform=ax.transAxes, fontsize=14, verticalalignment='top', horizontalalignment='left', bbox=text_props)  
                 
         fig.tight_layout()
         
@@ -657,7 +667,7 @@ if args.box_plot or args.bar_plot:
         if args.bar_average:
             suffix += "_mean"
 
-        plt.savefig(out_path + scene_name + "_" + ray_types[i] + "_" + str(benchmark_info["num_measure"]) + suffix + ".png")
+        plt.savefig(out_path + scene_name + "_" + ray_types[i] + "_" + str(benchmark_info["num_measure"]) + suffix + "_" + args.plot_cnf.split('\\')[-1] + ".png")
         #plt.show()
 
 if args.dump_table:

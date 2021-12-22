@@ -1,0 +1,5 @@
+# <kernel_identifier>, <plot_label>,<reference/own>
+pascal_speculative_stackless_tex1d_2, speculative stackless 1 (tex), own
+pascal_speculative_stackless, speculative stackless 1, own
+pascal_speculative_stackless_tex1d_opt5, speculative stackless 2 (tex), own
+pascal_speculative_stackless_opt5, speculative stackless 2, own

@@ -6,7 +6,7 @@ pascal_dynamic_fetch_stackless, dynamic fetch stackless, own
 pascal_stackless_opt3, stackless v1, own
 pascal_stackless_opt5, stackless v2, own
 tesla_persistent_while_while_early_break, early break, own
-tesla_persistent_speculative_while_while_early_break, speculative early break, own
+tesla_persistent_speculative_while_while_early_break, seculative early break, own
 # reference kernels
 kepler_dynamic_fetch, dynamic fetch, reference
 fermi_speculative_while_while, speculative while while, reference

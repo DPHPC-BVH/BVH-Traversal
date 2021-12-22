@@ -1,0 +1,7 @@
+# <kernel_identifier>, <plot_label>, <reference/own>
+pascal_stackless_opt3, stackless 1, own
+pascal_persistent_stackless_opt3, stackless 1 (persistent), own
+pascal_stackless_opt5, stackless 2, own
+pascal_persistent_stackless_opt5, stackless 2 (persistent), own
+pascal_speculative_stackless, speculative stackless, own
+pascal_persistent_speculative_stackless, speculative stackless (persistent), own
