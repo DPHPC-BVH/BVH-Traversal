@@ -151,7 +151,15 @@ void CudaBVH::createNodeBasic(const BVH& bvh)
     m_nodes.resizeDiscard((root->getSubtreeSize(BVH_STAT_NODE_COUNT) * 64 + Align - 1) & -Align);
 
     int nextNodeIdx = 0;
-    Array<StackEntry> stack(StackEntry(root, nextNodeIdx++, -1));
+
+    int root_parent = -1;
+
+    if (m_layout == BVHLayout_Stackless2) {
+        root_parent = EntrypointSentinel;
+        printf("\nLAyout2!!!!!!\n");
+    }
+
+    Array<StackEntry> stack(StackEntry(root, nextNodeIdx++, root_parent));
     while (stack.getSize())
     {
         StackEntry e = stack.removeLast();
@@ -193,7 +201,7 @@ void CudaBVH::createNodeBasic(const BVH& bvh)
         Vec4i extra_data;
 
         // if stackless -> add parent index and separation axis to unused fields
-        if(m_layout == BVHLayout_Stackless){
+        if(m_layout == BVHLayout_Stackless || m_layout == BVHLayout_Stackless2){
             int p = e.parent_idx; // no need to encode since it has to be an internal node
             extra_data = Vec4i(c0, c1, p, ord);
         }else{
@@ -214,6 +222,7 @@ void CudaBVH::createNodeBasic(const BVH& bvh)
         case BVHLayout_AOS_AOS:
         case BVHLayout_AOS_SOA:
         case BVHLayout_Stackless:
+        case BVHLayout_Stackless2:
             memcpy(m_nodes.getMutablePtr(e.idx * 64), data, 64);
             break;
 
@@ -246,6 +255,7 @@ void CudaBVH::createTriWoopBasic(const BVH& bvh)
         case BVHLayout_AOS_AOS:
         case BVHLayout_SOA_AOS:
         case BVHLayout_Stackless:
+        case BVHLayout_Stackless2:
             memcpy(m_triWoop.getMutablePtr(i * 64), m_woop, 48);
             break;
 
