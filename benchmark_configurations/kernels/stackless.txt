@@ -2,7 +2,7 @@ kernel: pascal_persistent_stackless_opt3
 kernel: pascal_persistent_stackless_opt5
 kernel: pascal_persistent_stackless
 kernel: pascal_dynamic_fetch_stackless
-kermel: pascal_dynamic_fetch_stackless_opt5
+kernel: pascal_dynamic_fetch_stackless_opt5
 kernel: pascal_stackless_opt3
 kernel: pascal_stackless_opt5
 kernel: pascal_speculative_stackless_tex1d_2
