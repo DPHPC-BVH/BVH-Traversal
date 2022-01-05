@@ -6,7 +6,7 @@ pascal_speculative_stackless, speculative stackless 1, own
 pascal_speculative_stackless_opt5, speculative stackless 2, own
 # reference kernels
 kepler_dynamic_fetch, dynamic fetch, reference
-fermi_speculative_while_while, speculative while while, reference
-tesla_persistent_while_while, persistent while while, reference
-tesla_persistent_speculative_while_while, persistent speculative while while, reference
+fermi_speculative_while_while, speculative, reference
+tesla_persistent_while_while, persistent, reference
+tesla_persistent_speculative_while_while, persistent speculative, reference
 tesla_persistent_packet, persistent packet, reference
