@@ -2,7 +2,6 @@ import csv
 from os import error
 import sys
 import matplotlib.pyplot as plt
-from scipy.stats.stats import _equal_var_ttest_denom
 from statsmodels.graphics.gofplots import qqplot
 from scipy.stats import shapiro
 import scipy
@@ -339,15 +338,27 @@ parser.add_argument('--QQ_plot', action="store_true", help='make QQ plots for al
 parser.add_argument('--dump_table', action="store_true", help='dump a table with the summarized measurements for each kernel and ray type')
 parser.add_argument('--time', action="store_true", help='do calculations using time measurements only')
 parser.add_argument('--no_title', action="store_true", help='Remove Titels from the plots')
+parser.add_argument('--no_ylabel', action="store_true", help='Remove the y-axis label from the plots')
 parser.add_argument('--xfmt', action="store_true", help='Automatically rotate labels on the x-axis to prevent overlaps')
 parser.add_argument('--plot_cnf', action="store", help='path to the plot config file')
 parser.add_argument('--plot_stat_data', action="store_true", help='adds an aditional box with statistical information to the plot')
 parser.add_argument('--bar_plot', action="store_true", help='makes bar plots')
 parser.add_argument('--no_color_fill', action="store_true", help='dont fill boxes with different colors')
 parser.add_argument('--bar_ci', action="store_true", help='adds CIs to bar plots')
+parser.add_argument('--scatter_plot', action="store_true", help='create scatter plots with error bars')
 parser.add_argument('--bar_average', action="store_true", help='creates bar plots using averages')
 parser.add_argument('--optix_src', action="store", help='Path to the optix benchmark dump which should be compared against')
 parser.add_argument('--optix_add', action="store", nargs='+', help='Use multiple scene benchmarks provided here as a list instead of src to compare against optix')
+parser.add_argument('--height', action="store", help='Figure height')
+parser.add_argument('--width', action="store", help='Figure width')
+parser.add_argument('--svg', action="store_true", help='Export plots as svg')
+parser.add_argument('--no_mes', action="store_true", help='Dont display the number of measurements')
+parser.add_argument('--bold_text', action="store_true", help='Make axis tick labels bold')
+parser.add_argument('--font_size', action="store", help='Font size')
+parser.add_argument('--border_thickness', action="store", help='Thickness of the figures border')
+parser.add_argument('--line_thickness', action="store", help='Thickness of the plot lines')
+parser.add_argument('--median_thickness', action="store", help='Thickness of median line')
+parser.add_argument('--median_color', action="store", help='Color of median line')
 
 
 
@@ -357,6 +368,10 @@ rays = []
 ray_types = ["Primary", "AO", "Diffuse"]
 
 benchmark_info, kernels, data = read_benchmark_file(args.src)
+
+#if args.bold_text:
+#    plt.rc('text', usetex=True)
+#    plt.rcParams['text.latex.preamble'] = [r'\boldmath']
 
 
 if args.plot_cnf is None:
@@ -521,10 +536,16 @@ if args.optix_src is not None:
     #            box.set_facecolor('lightgreen')
 
     # set border
+
+    b_thickness = 1.5
+    if args.border_thickness is not None:
+        b_thickness = float(args.border_thickness)
+
+
     for axis in ['top','bottom','left','right']:
-        ax.spines[axis].set_linewidth(1.5)
-        ax.xaxis.set_tick_params(width=1.5)
-        ax.yaxis.set_tick_params(width=1.5)
+        ax.spines[axis].set_linewidth(b_thickness)
+        ax.xaxis.set_tick_params(width=b_thickness)
+        ax.yaxis.set_tick_params(width=b_thickness)
 
     # set grid
     ax.yaxis.grid()
@@ -541,13 +562,29 @@ if args.optix_src is not None:
 
     exit()
 
-if args.box_plot or args.bar_plot:
+if args.box_plot or args.bar_plot or args.scatter_plot:
     label_list = get_kernel_label_list(kernel_plot_metadata, output_kernels)
     for i in range(len(rays)):
         plot_data = get_plot_data(mray_data, i, kernels, output_kernels)
         #data = get_box_plot_data(mray_data, i)
-        plt.figure(figsize =(10, 7))
-        fig, ax = plt.subplots(figsize = (10, 7))
+
+        if args.height is not None:
+            s_h = float(args.height)
+        else:
+            s_h = 7
+
+        if args.width is not None:
+            s_w = float(args.width)
+        else:
+            s_w = 10
+
+        
+    
+        plt.rc('text.latex', preamble=r'\usepackage{bm}')
+
+
+        plt.figure(figsize =(s_w, s_h))
+        fig, ax = plt.subplots(figsize = (s_w, s_h))
 
         #plt.figure()
         #fig, ax = plt.subplots()
@@ -559,13 +596,37 @@ if args.box_plot or args.bar_plot:
         bplot = None
         barplot = None
 
+        fontweight = 'normal'
+        fontsize = 18
+
+        if args.bold_text:
+            fontweight = 'bold'
+
+        if args.font_size is not None:
+            fontsize = int(args.font_size)
         
+        linewidth = 1.5
+        if args.line_thickness is not None:
+            linewidth = float(args.line_thickness)
+
+        medianwidth = linewidth
+        if args.median_thickness is not None:
+            medianwidth = float(args.median_thickness)
+
+        mediancolor = "darkorange"
+        if args.median_color is not None:
+            mediancolor = args.median_color
+
 
         if args.box_plot:
-            boxprops = dict(linestyle='--', linewidth=1.5, facecolor = '#d9d9d9')
-            medianprops = dict(linewidth=1.5)
-            bplot = plt.boxplot(plot_data, notch=True, labels=label_list, patch_artist=True, boxprops=boxprops, medianprops=medianprops)
-        elif args.bar_plot:
+            boxprops = dict(linestyle='--', linewidth=linewidth, facecolor = '#d9d9d9')
+
+            medianprops = dict(linewidth=medianwidth, color=mediancolor)
+            whiskerprops= dict(linewidth=linewidth)
+            bplot = plt.boxplot(plot_data, notch=True, labels=label_list, patch_artist=True, boxprops=boxprops, medianprops=medianprops, whiskerprops=whiskerprops)
+            for cap in bplot['caps']: 
+                cap.set(linewidth = linewidth) 
+        elif args.bar_plot or args.scatter_plot:
             summarized_data = None
             y_error = None
             if args.bar_average:
@@ -577,29 +638,36 @@ if args.box_plot or args.bar_plot:
                 y_error = median_95ci_errors(plot_data)
                 print(summarized_data)
                 print(y_error)
-                factor = statistics.NormalDist().inv_cdf((1+0.95)/2)
-                print(factor)
+                #factor = statistics.NormalDist().inv_cdf((1+0.95)/2)
+                #print(factor)
 
             print(summarized_data)
             print(label_list)
             #low errors = [su]
 
-            barplot = plt.bar(label_list, summarized_data, yerr=y_error, capsize=2, width=0.4)
-            max_y_lim = max(summarized_data)*1.2
-            min_y_lim = 0
-            plt.ylim(min_y_lim, max_y_lim)
+            if args.bar_plot:
+                barplot = plt.bar(label_list, summarized_data, yerr=y_error, capsize=2, width=0.4)
+            elif args.scatter_plot:
+                scatterplot = plt.errorbar(label_list, summarized_data, yerr=y_error, fmt='o', markersize=10, capsize=6, color='black', markeredgecolor='grey', markerfacecolor='grey')
+
+            if args.bar_plot:
+                max_y_lim = max(summarized_data)*1.2
+                min_y_lim = 0
+                plt.ylim(min_y_lim, max_y_lim)
 
         
-
-        if args.time:
-            y_label = plt.ylabel('Runtime [ms]', fontsize=16, labelpad=10)
-        else:
-            y_label = plt.ylabel('Performance [Mrays / s]', fontsize=16, labelpad=10)
+        if not args.no_ylabel:
+            if args.time:
+                y_label = plt.ylabel('Runtime [ms]', fontsize=16, labelpad=10)
+            else:
+                y_label = plt.ylabel('Performance [Mrays / s]', fontsize=16, labelpad=10)
 
         #y_label.set_rotation(0)
 
-        plt.yticks(fontsize=16)
-        plt.xticks(fontsize=16)
+
+
+        plt.yticks(fontsize=fontsize, fontweight=fontweight)
+        plt.xticks(fontsize=fontsize, fontweight=fontweight)
 
 
         # set title plot
@@ -624,14 +692,19 @@ if args.box_plot or args.bar_plot:
                     bar.set_facecolor('lightgreen')
 
         # set border
+
+        b_thickness = 1.5
+        if args.border_thickness is not None:
+            b_thickness = float(args.border_thickness)
+
         for axis in ['top','bottom','left','right']:
-            ax.spines[axis].set_linewidth(1.5)
-        ax.xaxis.set_tick_params(width=1.5)
-        ax.yaxis.set_tick_params(width=1.5)
+            ax.spines[axis].set_linewidth(b_thickness)
+        ax.xaxis.set_tick_params(width=b_thickness)
+        ax.yaxis.set_tick_params(width=b_thickness)
 
         # set grid
         
-        ax.yaxis.grid()
+        ax.yaxis.grid(linewidth=1.5)
         ax.set_axisbelow(True)
 
         # format x-labels
@@ -646,28 +719,42 @@ if args.box_plot or args.bar_plot:
             else:
                 diff = largest_diff_95ci(plot_data)
 
-            ci_diff = "%.2f" % (diff*100)
+            ci_diff = "%.1f" % (diff*100)
             if args.bar_average:
-                stat_str = r'$95 \% \ CI(mean): \pm$ '
+                stat_str = r'$95 \% \ CI(mean):$'
             else:
-                stat_str = r'$95 \% \ CI: \pm$ '
+                stat_str = "95% CI:"
 
-            stat_str += ci_diff + r'$\%$' 
-            stat_str += "\n"
-            stat_str += r'measurements: ' + str(benchmark_info["num_measure"])
+            if args.no_mes:
+                stat_str += "\n"
+
+            stat_str += r'$\pm$ '
+
+            stat_str += ci_diff + "%" 
+
+            if not args.no_mes:
+                stat_str += "\n"
+                stat_str += r'measurements: ' + str(benchmark_info["num_measure"])
 
             # place a text box in upper left in axes coords
-            ax.text(0.05, 0.925, stat_str, transform=ax.transAxes, fontsize=14, verticalalignment='top', horizontalalignment='left', bbox=text_props)  
+            ax.text(0.08, 0.925, stat_str, transform=ax.transAxes, fontsize=18, fontweight=fontweight, verticalalignment='top', horizontalalignment='left', bbox=text_props)  
                 
         fig.tight_layout()
         
         suffix = ""
         if args.bar_plot:
             suffix += "_bar"
+        if args.scatter_plot:
+            suffix += "_scatter"
         if args.bar_average:
             suffix += "_mean"
+        
+        if args.svg:
+            file_type = ".svg"
+        else:
+            file_type = ".png"
 
-        plt.savefig(out_path + scene_name + "_" + ray_types[i] + "_" + str(benchmark_info["num_measure"]) + suffix + "_" + args.plot_cnf.split('\\')[-1] + ".png")
+        plt.savefig(out_path + scene_name + "_" + ray_types[i] + "_" + str(benchmark_info["num_measure"]) + suffix + "_" + args.plot_cnf.split('\\')[-1] + file_type)
         #plt.show()
 
 if args.dump_table:
